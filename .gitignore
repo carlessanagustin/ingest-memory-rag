@@ -1,5 +1,6 @@
-# Project data
+# Project data (watched folder) — keep the folder, ignore its contents
 raw/*
+!raw/.gitkeep
 
 # Byte-compiled / optimized / caches
 __pycache__/
