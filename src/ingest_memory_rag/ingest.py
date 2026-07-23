@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 # Meta key used to associate every chunk with its source file so that an
 # updated file can have its stale chunks deleted before the new ones land.
-FILE_PATH_META = "file_path"
+# A dedicated key (not "file_path") is required: the Haystack converters set
+# their own "file_path" meta to the source basename, which would collide and
+# lose the absolute path we key deletions on.
+FILE_PATH_META = "source_file"
 
 
 class IngestionEngine:
@@ -34,12 +37,15 @@ class IngestionEngine:
         self.markdown_converter = MarkdownToDocument()
 
     def _convert(self, path: Path) -> list[Document]:
-        meta = {FILE_PATH_META: str(path)}
         if is_markdown(path):
-            result = self.markdown_converter.run(sources=[path], meta=meta)
+            result = self.markdown_converter.run(sources=[path])
         else:
-            result = self.text_converter.run(sources=[path], meta=meta)
-        return list(result["documents"])
+            result = self.text_converter.run(sources=[path])
+        documents = list(result["documents"])
+        # Stamp our key after conversion so the converter cannot clobber it.
+        for document in documents:
+            document.meta[FILE_PATH_META] = str(path)
+        return documents
 
     def _delete_existing(self, path: Path) -> int:
         filters = {"field": f"meta.{FILE_PATH_META}", "operator": "==", "value": str(path)}
@@ -54,7 +60,7 @@ class IngestionEngine:
         Returns the number of chunks written. Conversion happens before the
         delete so that a conversion failure leaves the existing chunks intact.
         """
-        path = Path(path)
+        path = Path(path).resolve()
         documents = self._convert(path)
         removed = self._delete_existing(path)
         if removed:

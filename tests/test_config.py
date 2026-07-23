@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ingest_memory_rag.config import (
     DEFAULT_QDRANT_URL,
     Settings,
@@ -47,6 +49,17 @@ def test_env_overrides(monkeypatch):
     assert settings.debounce_seconds == 2.5
     assert settings.recreate_index is True
     assert settings.scan_on_start is False
+
+
+def test_valid_split_by_override(monkeypatch):
+    monkeypatch.setenv("SPLIT_BY", "sentence")
+    assert Settings.from_env().split_by == "sentence"
+
+
+def test_invalid_split_by_raises(monkeypatch):
+    monkeypatch.setenv("SPLIT_BY", "bogus")
+    with pytest.raises(ValueError, match="SPLIT_BY"):
+        Settings.from_env()
 
 
 def test_is_markdown():

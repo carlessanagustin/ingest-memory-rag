@@ -11,6 +11,7 @@ dependencies = [
     "sentence-transformers>=3.0",
     "markdown-it-py>=3.0",
     "mdit-plain>=1.0",
+    "sentence-transformers-haystack>=0.1.1",
 ]
 
 [project.scripts]
@@ -40,7 +41,9 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+# 3.12 so mypy can parse dependency stubs (e.g. numpy) that use `type` aliases;
+# runtime support still includes 3.11 (see requires-python and the CI matrix).
+python_version = "3.12"
 files = ["src"]
 mypy_path = "src"
 disallow_untyped_defs = true
@@ -51,6 +54,9 @@ ignore_missing_imports = true
 addopts = "-q --cov=ingest_memory_rag --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: exercises a live Qdrant at QDRANT_URL (needs the Haystack ML stack)",
+]
 
 [tool.coverage.run]
 source = ["ingest_memory_rag"]

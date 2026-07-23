@@ -8,10 +8,12 @@ embedder is shared across every ingested file regardless of its format.
 from __future__ import annotations
 
 from haystack import Pipeline
-from haystack.components.embedders import SentenceTransformersDocumentEmbedder
 from haystack.components.preprocessors import DocumentSplitter
 from haystack.components.writers import DocumentWriter
 from haystack.document_stores.types import DuplicatePolicy
+from haystack_integrations.components.embedders.sentence_transformers import (
+    SentenceTransformersDocumentEmbedder,
+)
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 from ingest_memory_rag.config import Settings
