@@ -1,11 +1,11 @@
 ---
 id: TASK-1
 title: Watch raw folder and ingest txt/md files into Qdrant via Haystack
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-23 14:04'
-updated_date: '2026-07-23 14:20'
+updated_date: '2026-07-23 15:15'
 labels: []
 dependencies: []
 references:
@@ -26,8 +26,8 @@ A long-running Python app watches a configurable folder (default ./raw) for file
 - [x] #1 Watch folder and Qdrant URL are configurable via environment variables with defaults ./raw and http://localhost:6333
 - [x] #2 Creating or modifying a *.txt or *.md file under the watched folder triggers ingestion; other extensions are ignored
 - [x] #3 Rapid repeated filesystem events for the same file are debounced into a single ingestion
-- [ ] #4 Re-ingesting a changed file deletes its previous chunks in Qdrant before writing new ones (no duplicates/stale chunks)
-- [ ] #5 File watching works on Linux, macOS, and Windows without code changes
+- [x] #4 Re-ingesting a changed file deletes its previous chunks in Qdrant before writing new ones (no duplicates/stale chunks)
+- [x] #5 File watching works on Linux, macOS, and Windows without code changes
 - [x] #6 A fast unit test suite covers pattern-matching, debounce, and file-selection logic without touching the network or a live Qdrant
 <!-- AC:END -->
 
@@ -57,4 +57,26 @@ AC verification (env: macOS, dev tools + watchdog only; no live Qdrant, no ML st
 - AC#4 NOT YET VERIFIED: delete-then-write logic is implemented in ingest.py (_delete_existing by meta.file_path, convert->delete->write ordering) but requires a live Qdrant + embedding model to prove end-to-end. Needs `docker compose up -d` + `uv sync`.
 - AC#5 PARTIALLY VERIFIED: proven on macOS (FSEvents) via the real-Observer test; code has zero OS-specific branches (watchdog abstracts inotify/FSEvents/ReadDirectoryChangesW). Full Linux/Windows proof needs CI on those OSes.
 Checks: ruff lint+format clean, mypy clean (src), pytest 14 passed / 100% cov. uv.lock committed (112 pkgs).
+
+E2E verification (live Qdrant via docker compose + full uv sync, macOS/Python 3.12):
+- Discovered Haystack 3.0.0 is installed (major release post-training): SentenceTransformersDocumentEmbedder moved out of core to the sentence-transformers-haystack integration (import haystack_integrations.components.embedders.sentence_transformers). Added that dep and fixed pipeline.py import.
+- Fixed AC#4 bug found during E2E: the Haystack converters overwrite meta["file_path"] with the source basename, which broke delete-by-path. Switched to a dedicated meta key "source_file" (resolved absolute path, stamped AFTER conversion) and key deletions on meta.source_file.
+- Made split_by a validated Literal in config (clear error on bad SPLIT_BY) to satisfy the DocumentSplitter type; bumped mypy python_version to 3.12 so it can parse numpy stubs.
+- AC#4 VERIFIED: tests/test_qdrant_integration.py::test_update_replaces_previous_chunks — after updating a file, count==new chunk count, new token present, old token absent. Also added test_dropped_file_flows_through_watcher_into_qdrant (real Observer -> debounce -> ingest -> Qdrant) and a markdown ingest test.
+- Full suite: 19 passed (16 unit + 3 integration), ruff+mypy clean, 100% coverage on config/watcher. Integration tests skip cleanly when Qdrant/Haystack are absent.
+- AC#5 still pending full proof: verified on macOS; Linux/Windows to be confirmed by CI (TASK-2).
+
+AC#5 progress — cross-platform watching verified on 2 of 3 OSes with real-Observer tests:
+- macOS (FSEvents): verified earlier (test_watch_integration + live-Qdrant integration).
+- Linux (inotify): verified now by running the watcher suite inside a python:3.12-slim container (docker run ... pytest -m "not integration"): 16 passed, 1 skipped (platform linux). The real Observer tests exercise inotify.
+- Windows (ReadDirectoryChangesW): NOT verifiable locally; requires a Windows runner. The intended mechanism is the CI matrix in TASK-2 (unit tests on windows-latest). Code has zero OS-specific branches; watchdog selects the backend per OS.
+AC#5 left unchecked pending objective Windows evidence.
+
+Per user decision (2026-07-23): accept the macOS + Linux real-Observer verification plus watchdog documented Windows backend (no OS-specific code paths) as sufficient evidence for AC#5. CI on windows-latest (TASK-2) will confirm Windows as belt-and-suspenders.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented a cross-platform folder-watching ingestion service (src/ingest_memory_rag): a watchdog observer with event debouncing and a startup scan feeds a Haystack split->embed->write pipeline into Qdrant; updated files have their prior chunks deleted (keyed on meta.source_file, the resolved absolute path) before the new chunks are written, so the store never accumulates stale content. Config is environment-driven (defaults ./raw and http://localhost:6333). Verified end-to-end against live Qdrant on Haystack 3.0 with all-MiniLM-L6-v2: 19 tests pass (16 unit + 3 live-Qdrant integration), ruff and mypy clean, 100% coverage on config/watcher. Cross-platform watching proven on macOS (FSEvents) and Linux (inotify, via a python:3.12-slim container run); Windows accepted via watchdog documented backend and to be confirmed by the CI matrix in TASK-2.
+<!-- SECTION:FINAL_SUMMARY:END -->
