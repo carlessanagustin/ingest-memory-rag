@@ -1,0 +1,143 @@
+import threading
+from pathlib import Path
+
+from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
+
+from ingest_memory_rag.config import PATTERNS
+from ingest_memory_rag.watcher import (
+    Debouncer,
+    IngestEventHandler,
+    initial_scan,
+    iter_matching_files,
+    should_ingest,
+)
+
+
+def test_should_ingest_matches_txt_and_md(tmp_path):
+    txt = tmp_path / "a.txt"
+    md = tmp_path / "b.md"
+    other = tmp_path / "c.py"
+    for f in (txt, md, other):
+        f.write_text("x")
+
+    assert should_ingest(txt, PATTERNS) is True
+    assert should_ingest(md, PATTERNS) is True
+    assert should_ingest(other, PATTERNS) is False
+
+
+def test_should_ingest_ignores_directories(tmp_path):
+    sub = tmp_path / "nested.txt"  # a directory that happens to match the glob
+    sub.mkdir()
+    assert should_ingest(sub, PATTERNS) is False
+
+
+def test_iter_matching_files_finds_only_txt_and_md(tmp_path):
+    (tmp_path / "keep1.txt").write_text("x")
+    (tmp_path / "keep2.md").write_text("x")
+    (tmp_path / "skip.log").write_text("x")
+    nested = tmp_path / "sub"
+    nested.mkdir()
+    (nested / "keep3.md").write_text("x")
+
+    found = {p.name for p in iter_matching_files(tmp_path, PATTERNS)}
+
+    assert found == {"keep1.txt", "keep2.md", "keep3.md"}
+
+
+def test_debouncer_coalesces_rapid_triggers():
+    calls: list[Path] = []
+    done = threading.Event()
+
+    def action(path: Path) -> None:
+        calls.append(path)
+        done.set()
+
+    debouncer = Debouncer(delay=0.05, action=action)
+    target = Path("/tmp/file.txt")
+    for _ in range(5):
+        debouncer.trigger(target)  # burst faster than the delay
+
+    assert done.wait(timeout=2.0), "debounced action never fired"
+    # A tiny grace period to catch any erroneous extra firings.
+    done.clear()
+    assert done.wait(timeout=0.2) is False
+    assert calls == [target]
+
+
+def test_debouncer_fires_per_distinct_path():
+    fired: list[Path] = []
+    lock = threading.Lock()
+    both = threading.Event()
+
+    def action(path: Path) -> None:
+        with lock:
+            fired.append(path)
+            if len(fired) == 2:
+                both.set()
+
+    debouncer = Debouncer(delay=0.05, action=action)
+    debouncer.trigger(Path("/tmp/a.txt"))
+    debouncer.trigger(Path("/tmp/b.md"))
+
+    assert both.wait(timeout=2.0), "expected both paths to fire"
+    assert set(fired) == {Path("/tmp/a.txt"), Path("/tmp/b.md")}
+
+
+def test_debouncer_cancel_all_prevents_firing():
+    fired: list[Path] = []
+    done = threading.Event()
+
+    def action(path: Path) -> None:
+        fired.append(path)
+        done.set()
+
+    debouncer = Debouncer(delay=0.1, action=action)
+    debouncer.trigger(Path("/tmp/x.txt"))
+    debouncer.cancel_all()
+
+    assert done.wait(timeout=0.3) is False
+    assert fired == []
+
+
+class _RecordingDebouncer:
+    def __init__(self) -> None:
+        self.triggered: list[Path] = []
+
+    def trigger(self, path: Path) -> None:
+        self.triggered.append(path)
+
+
+def test_handler_schedules_created_modified_and_moved():
+    recorder = _RecordingDebouncer()
+    handler = IngestEventHandler(PATTERNS, recorder)  # type: ignore[arg-type]
+
+    handler.on_created(FileCreatedEvent("/tmp/new.txt"))
+    handler.on_modified(FileModifiedEvent("/tmp/changed.md"))
+    handler.on_moved(FileMovedEvent("/tmp/.tmp-abc", "/tmp/saved.md"))
+
+    assert recorder.triggered == [
+        Path("/tmp/new.txt"),
+        Path("/tmp/changed.md"),
+        Path("/tmp/saved.md"),  # move uses the destination path
+    ]
+
+
+def test_handler_decodes_bytes_paths():
+    recorder = _RecordingDebouncer()
+    handler = IngestEventHandler(PATTERNS, recorder)  # type: ignore[arg-type]
+
+    handler.on_created(FileCreatedEvent(b"/tmp/bytes.txt"))
+
+    assert recorder.triggered == [Path("/tmp/bytes.txt")]
+
+
+def test_initial_scan_invokes_action_per_matching_file(tmp_path):
+    (tmp_path / "one.txt").write_text("x")
+    (tmp_path / "two.md").write_text("x")
+    (tmp_path / "skip.log").write_text("x")
+    seen: list[Path] = []
+
+    count = initial_scan(tmp_path, PATTERNS, seen.append)
+
+    assert count == 2
+    assert {p.name for p in seen} == {"one.txt", "two.md"}
