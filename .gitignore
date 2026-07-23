@@ -1,0 +1,66 @@
+# Project data
+raw/*
+
+# Byte-compiled / optimized / caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging / build
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+
+# Virtual environments (recreate from the lockfile, never commit)
+.venv/
+venv/
+env/
+.env/
+
+# uv / pip caches (the uv.lock and requirements*.txt lockfiles ARE committed)
+.uv-cache/
+
+# Secrets — read from the environment, never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+
+# Ruff
+.ruff_cache/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+.pytype/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Security scan reports
+bandit-report.*
+pip-audit-report.*
+gitleaks-report.*
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
