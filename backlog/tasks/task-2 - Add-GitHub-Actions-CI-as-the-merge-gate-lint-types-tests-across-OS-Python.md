@@ -1,11 +1,11 @@
 ---
 id: TASK-2
 title: 'Add GitHub Actions CI as the merge gate (lint, types, tests across OS/Python)'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-23 14:56'
-updated_date: '2026-07-23 15:00'
+updated_date: '2026-07-23 15:51'
 labels: []
 dependencies:
   - TASK-1
@@ -20,11 +20,11 @@ Enforce the project standards in CI on every push and pull request: ruff lint+fo
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CI runs on push and pull_request and is the merge gate
-- [ ] #2 ruff check, ruff format --check, and mypy run in CI and must pass
-- [ ] #3 Unit tests (pytest -m "not integration") run on Linux, macOS, and Windows for Python 3.11 and 3.12, enforcing the 80% coverage floor
-- [ ] #4 Integration tests (pytest -m integration) run against a Qdrant service container on Linux
-- [ ] #5 Dependencies are installed reproducibly from uv.lock (uv sync --frozen)
+- [x] #1 CI runs on push and pull_request and is the merge gate
+- [x] #2 ruff check, ruff format --check, and mypy run in CI and must pass
+- [x] #3 Unit tests (pytest -m "not integration") run on Linux, macOS, and Windows for Python 3.11 and 3.12, enforcing the 80% coverage floor
+- [x] #4 Integration tests (pytest -m integration) run against a Qdrant service container on Linux
+- [x] #5 Dependencies are installed reproducibly from uv.lock (uv sync --frozen)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -47,4 +47,12 @@ Added .github/workflows/ci.yml with 3 jobs (push + pull_request):
 Uses astral-sh/setup-uv@v6 with caching; concurrency cancels superseded runs.
 Validated locally: YAML parses (jobs lint/test/integration); uv lock --check passes so --frozen installs match the committed lock; pytest -m "not integration" => 16 passed / 100% cov; pytest -m integration => 3 passed against live Qdrant.
 Runtime verification of the workflow itself (matrix + service container) is pending a push that triggers Actions; ACs to be checked once CI runs green.
+
+CI verified green on both triggers and enforced as merge gate: push run 30020826029 and pull_request run 30021614970 (PR #1), all 8 jobs (lint+mypy, unit matrix ubuntu/macos/windows x py3.11/3.12 with 80% coverage floor, integration vs Qdrant service). Branch protection on main requires all 8 checks (strict, enforce_admins=false). PR #1 squash-merged to main as 8debbcc and the feature branch was deleted (local+remote). Fix required to go green: pin setup-uv to v9.0.0 (no floating v9 tag). Note: this finalization was re-applied after a git reset --hard during branch cleanup discarded the earlier (uncommitted) task edits.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added .github/workflows/ci.yml as the merge gate: lint (ruff check + ruff format --check + mypy), unit-test matrix across ubuntu/macos/windows x Python 3.11/3.12 enforcing the 80% coverage floor, and integration tests against a Qdrant service container; every job installs reproducibly via uv sync --frozen. Verified green on push (run 30020826029) and pull_request (PR #1, run 30021614970), 8/8 jobs each, and enforced via branch protection on main requiring all 8 checks. Fix to go green: pin setup-uv to v9.0.0.
+<!-- SECTION:FINAL_SUMMARY:END -->
