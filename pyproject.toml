@@ -8,12 +8,11 @@ license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "haystack-ai>=2.6",
-    "qdrant-haystack>=5.0",
+    "qdrant-client>=1.12",
+    "fastembed>=0.4",
     "watchdog>=4.0",
-    "sentence-transformers>=3.0",
     "markdown-it-py>=3.0",
     "mdit-plain>=1.0",
-    "sentence-transformers-haystack>=0.1.1",
 ]
 
 [project.scripts]

@@ -58,6 +58,14 @@ def is_markdown(path: str | os.PathLike[str]) -> bool:
     return Path(path).suffix.lower() in MARKDOWN_SUFFIXES
 
 
+def fastembed_vector_name(model: str) -> str:
+    """The Qdrant named-vector key fastembed (and mcp-server-qdrant) use for a model.
+
+    e.g. "sentence-transformers/all-MiniLM-L6-v2" -> "fast-all-minilm-l6-v2".
+    """
+    return "fast-" + model.rsplit("/", 1)[-1].lower()
+
+
 @dataclass(frozen=True)
 class Settings:
     """Immutable, environment-driven configuration for the ingestion service."""

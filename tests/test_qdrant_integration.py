@@ -1,11 +1,12 @@
 """End-to-end ingestion against a live Qdrant (skipped when unavailable).
 
-Proves AC#4: re-ingesting a changed file deletes its previous chunks before
-writing the new ones, so the store never accumulates stale content.
+Verifies the fastembed-compatible store: chunks land under the named vector with
+a document/metadata payload, and re-ingesting a changed file replaces its prior
+chunks (no stale content).
 
 Requires a reachable Qdrant (``QDRANT_URL``, default http://localhost:6333) and
-the Haystack ML stack. Both absences ``skip`` rather than fail, so the fast unit
-suite stays green without any services. Run explicitly with:
+the ingestion deps (fastembed, qdrant-client, haystack). Absences ``skip`` so the
+fast unit suite stays green without services. Run explicitly with:
 
     uv run pytest -m integration
 """
@@ -21,9 +22,11 @@ import pytest
 
 from ingest_memory_rag.config import Settings
 
-# The heavy Haystack import is optional; skip the whole module if it is absent.
+pytest.importorskip("fastembed")
+pytest.importorskip("qdrant_client")
 pytest.importorskip("haystack")
-pytest.importorskip("haystack_integrations.document_stores.qdrant")
+
+from qdrant_client.models import FieldCondition, Filter, MatchValue  # noqa: E402
 
 QDRANT_URL = Settings.from_env().qdrant_url
 
@@ -45,21 +48,43 @@ pytestmark = [
 ]
 
 
-def _by_source(path):
-    from ingest_memory_rag.ingest import FILE_PATH_META
+def _source_filter(path):
+    return Filter(
+        must=[
+            FieldCondition(
+                key="metadata.source_file",
+                match=MatchValue(value=str(path.resolve())),
+            )
+        ]
+    )
 
-    return {
-        "field": f"meta.{FILE_PATH_META}",
-        "operator": "==",
-        "value": str(path.resolve()),
-    }
+
+def _total(engine):
+    return engine.client.count(collection_name=engine.settings.index, exact=True).count
+
+
+def _count_for(engine, path):
+    return engine.client.count(
+        collection_name=engine.settings.index,
+        count_filter=_source_filter(path),
+        exact=True,
+    ).count
+
+
+def _documents_for(engine, path):
+    points, _ = engine.client.scroll(
+        collection_name=engine.settings.index,
+        scroll_filter=_source_filter(path),
+        with_payload=True,
+        limit=100,
+    )
+    return " ".join((p.payload or {}).get("document", "") for p in points)
 
 
 @pytest.fixture
 def engine():
     from ingest_memory_rag.ingest import IngestionEngine
 
-    # Dedicated, freshly recreated collection so the test is isolated.
     settings = replace(
         Settings.from_env(),
         index="e2e_ingest_test",
@@ -73,39 +98,34 @@ def engine():
 def test_update_replaces_previous_chunks(engine, tmp_path):
     doc = tmp_path / "doc.txt"
 
-    # Large first version → several chunks, tagged with a distinctive token.
     doc.write_text("ALPHATOKEN " + " ".join(["lorem"] * 300))
     written_a = engine.ingest_file(doc)
     assert written_a > 1
-    assert engine.document_store.count_documents() == written_a
+    assert _total(engine) == written_a
+    assert _count_for(engine, doc) == written_a
 
-    # Small second version → a single chunk with a different token.
     doc.write_text("BRAVOTOKEN just a short replacement body")
     written_b = engine.ingest_file(doc)
 
-    total = engine.document_store.count_documents()
-    assert total == written_b, f"stale chunks left behind: {total} != {written_b}"
-
-    stored = engine.document_store.filter_documents(filters=_by_source(doc))
-    contents = " ".join(d.content or "" for d in stored)
+    assert _total(engine) == written_b, "stale chunks left behind"
+    assert _count_for(engine, doc) == written_b
+    contents = _documents_for(engine, doc)
     assert "BRAVOTOKEN" in contents
-    assert "ALPHATOKEN" not in contents  # old content fully removed
+    assert "ALPHATOKEN" not in contents
 
 
 def test_markdown_file_is_ingested(engine, tmp_path):
     note = tmp_path / "note.md"
-    note.write_text("# Heading\n\nSome **markdown** body text for embedding.")
+    note.write_text("# Heading\n\nSome markdown body text for embedding.")
 
     written = engine.ingest_file(note)
 
     assert written >= 1
-    stored = engine.document_store.filter_documents(filters=_by_source(note))
-    assert stored
-    assert any("markdown" in (d.content or "").lower() for d in stored)
+    assert "markdown" in _documents_for(engine, note).lower()
 
 
 def test_dropped_file_flows_through_watcher_into_qdrant(engine, tmp_path):
-    """Full chain: watchdog event → debounce → ingest → Qdrant."""
+    """Full chain: watchdog event -> debounce -> ingest -> Qdrant."""
     from watchdog.observers import Observer
 
     from ingest_memory_rag.config import PATTERNS
@@ -118,15 +138,12 @@ def test_dropped_file_flows_through_watcher_into_qdrant(engine, tmp_path):
     observer.start()
     try:
         (tmp_path / "dropped.txt").write_text("end to end ingestion " * 20)
-
         deadline = time.monotonic() + 20
-        count = 0
         while time.monotonic() < deadline:
-            count = engine.document_store.count_documents()
-            if count > 0:
+            if _total(engine) > 0:
                 break
             time.sleep(0.3)
-        assert count > 0, "file dropped into the watched folder never reached Qdrant"
+        assert _total(engine) > 0, "dropped file never reached Qdrant"
     finally:
         observer.stop()
         debouncer.cancel_all()

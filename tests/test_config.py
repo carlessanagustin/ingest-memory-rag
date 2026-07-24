@@ -5,6 +5,7 @@ import pytest
 from ingest_memory_rag.config import (
     DEFAULT_QDRANT_URL,
     Settings,
+    fastembed_vector_name,
     is_markdown,
 )
 
@@ -71,3 +72,10 @@ def test_is_markdown():
     assert is_markdown("README.MARKDOWN") is True
     assert is_markdown("data.txt") is False
     assert is_markdown("script.py") is False
+
+
+def test_fastembed_vector_name():
+    assert (
+        fastembed_vector_name("sentence-transformers/all-MiniLM-L6-v2") == "fast-all-minilm-l6-v2"
+    )
+    assert fastembed_vector_name("BAAI/bge-small-en-v1.5") == "fast-bge-small-en-v1.5"

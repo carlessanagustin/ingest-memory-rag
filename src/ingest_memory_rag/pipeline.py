@@ -1,51 +1,50 @@
-"""Haystack document store and indexing pipeline construction.
+"""Qdrant client, fastembed embedder, and splitter construction.
 
-The indexing pipeline is deliberately split → embed → write. File conversion is
-done per-file (see :mod:`ingest_memory_rag.ingest`) so a single, warmed-up
-embedder is shared across every ingested file regardless of its format.
+The collection is written in the layout the official mcp-server-qdrant reads:
+a named vector (``fast-<model>``) and a payload of ``{"document", "metadata"}``.
+Embeddings come from fastembed with the same model the MCP server uses to embed
+queries, so store and query align. Parsing/splitting still use Haystack.
 """
 
 from __future__ import annotations
 
-from haystack import Pipeline
+from fastembed import TextEmbedding
 from haystack.components.preprocessors import DocumentSplitter
-from haystack.components.writers import DocumentWriter
-from haystack.document_stores.types import DuplicatePolicy
-from haystack_integrations.components.embedders.sentence_transformers import (
-    SentenceTransformersDocumentEmbedder,
-)
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
 
-from ingest_memory_rag.config import Settings
+from ingest_memory_rag.config import Settings, fastembed_vector_name
 
 
-def create_document_store(settings: Settings) -> QdrantDocumentStore:
-    return QdrantDocumentStore(
-        url=settings.qdrant_url,
-        index=settings.index,
-        embedding_dim=settings.embedding_dim,
-        recreate_index=settings.recreate_index,
+def create_qdrant_client(settings: Settings) -> QdrantClient:
+    return QdrantClient(url=settings.qdrant_url)
+
+
+def create_embedder(settings: Settings) -> TextEmbedding:
+    return TextEmbedding(model_name=settings.embedding_model)
+
+
+def create_splitter(settings: Settings) -> DocumentSplitter:
+    splitter = DocumentSplitter(
+        split_by=settings.split_by,
+        split_length=settings.split_length,
+        split_overlap=settings.split_overlap,
     )
+    splitter.warm_up()
+    return splitter
 
 
-def create_indexing_pipeline(settings: Settings, document_store: QdrantDocumentStore) -> Pipeline:
-    """Build split → embed → write. Entry point is the ``splitter`` component."""
-    pipeline = Pipeline()
-    pipeline.add_component(
-        "splitter",
-        DocumentSplitter(
-            split_by=settings.split_by,
-            split_length=settings.split_length,
-            split_overlap=settings.split_overlap,
-        ),
-    )
-    pipeline.add_component(
-        "embedder", SentenceTransformersDocumentEmbedder(model=settings.embedding_model)
-    )
-    pipeline.add_component(
-        "writer",
-        DocumentWriter(document_store=document_store, policy=DuplicatePolicy.OVERWRITE),
-    )
-    pipeline.connect("splitter.documents", "embedder.documents")
-    pipeline.connect("embedder.documents", "writer.documents")
-    return pipeline
+def ensure_collection(client: QdrantClient, settings: Settings) -> None:
+    """Create the collection with the fastembed-compatible named vector if absent."""
+    name = settings.index
+    if settings.recreate_index and client.collection_exists(name):
+        client.delete_collection(name)
+    if not client.collection_exists(name):
+        client.create_collection(
+            name,
+            vectors_config={
+                fastembed_vector_name(settings.embedding_model): VectorParams(
+                    size=settings.embedding_dim, distance=Distance.COSINE
+                )
+            },
+        )
