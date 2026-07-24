@@ -93,10 +93,84 @@ uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% cover
 
 ## MCP (query the ingested data)
 
-Ingestion writes a Qdrant collection compatible with the official
-[`mcp-server-qdrant`](https://github.com/qdrant/mcp-server-qdrant), so MCP
-clients (Claude Code, opencode, pi.dev) can run semantic search over your
-ingested files. See [docs/mcp.md](docs/mcp.md).
+Ingestion writes a Qdrant collection the official
+[`mcp-server-qdrant`](https://github.com/qdrant/mcp-server-qdrant) can serve, so
+MCP clients (Claude Code, opencode, pi.dev) can run semantic search over your
+ingested files. With Qdrant running and data ingested, start the server over SSE:
+
+```bash
+QDRANT_URL=http://localhost:6333 COLLECTION_NAME=Document \
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2 \
+FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8000 \
+  uvx mcp-server-qdrant --transport sse
+```
+
+Then point your MCP client (Claude Code, opencode, or pi.dev) at the SSE endpoint
+**`http://127.0.0.1:8000/sse`**. Keep `EMBEDDING_MODEL` as `all-MiniLM-L6-v2`
+(384-dim) so queries match the ingested vectors.
+
+### Claude Code
+
+```bash
+claude mcp add --transport sse qdrant http://127.0.0.1:8000/sse
+```
+
+Add `--scope project` to write a shared `.mcp.json`, or `--scope user` to enable it
+in every project. The equivalent `.mcp.json` entry:
+
+```json
+{
+  "mcpServers": {
+    "qdrant": { "type": "sse", "url": "http://127.0.0.1:8000/sse" }
+  }
+}
+```
+
+Run `/mcp` to confirm `qdrant` is connected and its `qdrant-find` tool is listed,
+then ask Claude to search your ingested files.
+
+### opencode
+
+Add the server to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "qdrant": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8000/sse",
+      "enabled": true
+    }
+  }
+}
+```
+
+opencode loads the server's `qdrant-find` tool at startup; ask it to search your
+ingested files to confirm.
+
+### pi.dev (Pi coding agent)
+
+Pi has no built-in MCP support — enable it with a community adapter such as
+[`pi-mcp`](https://github.com/0xKobold/pi-mcp). After installing the extension,
+register the server in its config (for `pi-mcp`, `~/.0xkobold/mcp.json`):
+
+```json
+{
+  "servers": [
+    {
+      "name": "qdrant",
+      "transport": { "type": "sse", "url": "http://127.0.0.1:8000/sse" },
+      "enabled": true,
+      "autoReconnect": true
+    }
+  ]
+}
+```
+
+In Pi, run `/mcp discover` (or `/mcp status`) to confirm the `qdrant-find` tool is
+available, then ask it to search your ingested files. The exact config path and
+format follow the adapter you choose.
 
 ## License
 
