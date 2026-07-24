@@ -12,20 +12,21 @@ the same code runs unchanged everywhere.
 
 ## How it works
 
-```
-raw/*.txt|*.md  ──►  watchdog event  ──►  debounce  ──►  IngestionEngine
-                                                              │
-             TextFileToDocument / MarkdownToDocument  ◄───────┘
-                                │
-        delete prior chunks for this file  ─►  DocumentSplitter
-                                                     │
-                            SentenceTransformersDocumentEmbedder
-                                                     │
-                                   DocumentWriter ─► QdrantDocumentStore
+```mermaid
+flowchart TD
+    A[".txt / .md file in ./raw"] --> B["watchdog event"]
+    B --> C["debounce"]
+    C --> D["IngestionEngine"]
+    D --> E["convert<br/>TextFileToDocument / MarkdownToDocument"]
+    E --> F["delete prior chunks<br/>(by meta.source_file)"]
+    F --> G["DocumentSplitter"]
+    G --> H["SentenceTransformersDocumentEmbedder"]
+    H --> I["DocumentWriter"]
+    I --> Q[("Qdrant")]
 ```
 
-Each chunk is tagged with `meta.file_path`; on update the engine deletes all
-chunks with that `file_path` before writing the new ones.
+Each chunk is tagged with `meta.source_file`; on update the engine deletes all
+chunks with that `source_file` before writing the new ones.
 
 ## Requirements
 
@@ -89,3 +90,7 @@ uv run ruff format .    # format
 uv run mypy             # type-check
 uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% coverage
 ```
+
+## License
+
+This project is licensed under the MIT License — see [LICENSE](LICENSE).

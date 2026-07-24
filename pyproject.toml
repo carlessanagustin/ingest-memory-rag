@@ -3,6 +3,8 @@ name = "ingest-memory-rag"
 version = "0.1.0"
 description = "Watch a folder and ingest .txt/.md files into a Qdrant vector DB via Haystack."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "haystack-ai>=2.6",
