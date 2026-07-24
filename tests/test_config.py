@@ -20,6 +20,7 @@ def test_defaults(monkeypatch):
         "DEBOUNCE_SECONDS",
         "QDRANT_RECREATE_INDEX",
         "SCAN_ON_START",
+        "WATCH_USE_POLLING",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -31,6 +32,7 @@ def test_defaults(monkeypatch):
     assert settings.patterns == ("*.txt", "*.md")
     assert settings.recreate_index is False
     assert settings.scan_on_start is True
+    assert settings.use_polling is False
 
 
 def test_env_overrides(monkeypatch):
@@ -40,6 +42,7 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("DEBOUNCE_SECONDS", "2.5")
     monkeypatch.setenv("QDRANT_RECREATE_INDEX", "true")
     monkeypatch.setenv("SCAN_ON_START", "no")
+    monkeypatch.setenv("WATCH_USE_POLLING", "true")
 
     settings = Settings.from_env()
 
@@ -49,6 +52,7 @@ def test_env_overrides(monkeypatch):
     assert settings.debounce_seconds == 2.5
     assert settings.recreate_index is True
     assert settings.scan_on_start is False
+    assert settings.use_polling is True
 
 
 def test_valid_split_by_override(monkeypatch):

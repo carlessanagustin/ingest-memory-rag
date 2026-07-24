@@ -7,6 +7,30 @@ services:
       - "6334:6334" # gRPC
     volumes:
       - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # The image ships bash but no curl/wget; a /dev/tcp probe confirms the
+      # REST port is accepting connections (i.e. Qdrant is up).
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+
+  app:
+    build: .
+    container_name: ingest-memory-rag
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      WATCH_FOLDER: /app/raw
+      # Bind-mounted host dirs do not deliver native inotify/FSEvents on
+      # Docker Desktop; poll instead so host changes are detected.
+      WATCH_USE_POLLING: "true"
+    volumes:
+      - ./raw:/app/raw
+    restart: unless-stopped
 
 volumes:
   qdrant_storage:

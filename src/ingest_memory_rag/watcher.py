@@ -20,6 +20,7 @@ from watchdog.events import (
     PatternMatchingEventHandler,
 )
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from ingest_memory_rag.config import Settings
 
@@ -160,7 +161,9 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
 
     debouncer = Debouncer(settings.debounce_seconds, action)
     handler = IngestEventHandler(settings.patterns, debouncer)
-    observer = Observer()
+    # Native FS events (inotify/FSEvents) are not delivered across bind mounts
+    # on Docker Desktop; polling reliably picks up changes there.
+    observer = PollingObserver() if settings.use_polling else Observer()
     observer.schedule(handler, str(folder), recursive=True)
     observer.start()
     logger.info("Watching %s for %s (Ctrl+C to stop)", folder, list(settings.patterns))

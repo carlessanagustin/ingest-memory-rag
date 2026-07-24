@@ -29,21 +29,33 @@ chunks with that `file_path` before writing the new ones.
 
 ## Requirements
 
-- Python 3.11 or 3.12
-- [uv](https://docs.astral.sh/uv/)
-- A running Qdrant at `http://localhost:6333` (see below)
+- Docker + Docker Compose — to run the full stack, **or**
+- for local development: Python 3.11 or 3.12, [uv](https://docs.astral.sh/uv/), and a running Qdrant at `http://localhost:6333`
 
 ## Setup
 
+### Run the full stack with Docker (recommended)
+
+`docker compose up` starts **both** Qdrant and the ingestion app. The app waits
+until Qdrant is healthy, then watches the bind-mounted `./raw` folder.
+
 ```bash
-# 1. Start Qdrant
-docker compose up -d
+docker compose up --build      # start Qdrant + the app
+# ...then add or edit a .txt / .md file in ./raw on your host
+docker compose down            # stop everything
+```
 
-# 2. Install dependencies from the lockfile (reproducible)
-uv sync --frozen
+- The app reaches Qdrant over the compose network (`QDRANT_URL=http://qdrant:6333`) — no code change, just env.
+- `./raw` is bind-mounted into the container, and `WATCH_USE_POLLING=true` is set so
+  host changes are detected across the mount (Docker Desktop does not deliver
+  native FS events there).
 
-# 3. Run the watcher (defaults: WATCH_FOLDER=./raw, QDRANT_URL=http://localhost:6333)
-uv run ingest-memory-rag
+### Run locally (development)
+
+```bash
+docker compose up -d qdrant    # just the database
+uv sync --frozen               # install from the lockfile
+uv run ingest-memory-rag       # watch ./raw, ingest into localhost:6333
 ```
 
 Drop or edit a `.txt` / `.md` file in `./raw` and watch it get indexed. Inspect
@@ -66,6 +78,7 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 | `DEBOUNCE_SECONDS` | `1.0` | Coalesce rapid save events |
 | `SCAN_ON_START` | `true` | Ingest existing matching files on startup |
 | `QDRANT_RECREATE_INDEX` | `false` | Drop and recreate the collection at startup |
+| `WATCH_USE_POLLING` | `false` | Poll instead of native FS events (needed for bind mounts on Docker Desktop) |
 
 ## Development
 

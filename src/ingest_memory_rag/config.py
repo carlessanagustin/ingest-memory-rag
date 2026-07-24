@@ -74,6 +74,7 @@ class Settings:
     debounce_seconds: float
     recreate_index: bool
     scan_on_start: bool
+    use_polling: bool
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -90,4 +91,5 @@ class Settings:
             debounce_seconds=_env_float("DEBOUNCE_SECONDS", 1.0),
             recreate_index=_env_bool("QDRANT_RECREATE_INDEX", default=False),
             scan_on_start=_env_bool("SCAN_ON_START", default=True),
+            use_polling=_env_bool("WATCH_USE_POLLING", default=False),
         )
