@@ -91,6 +91,13 @@ uv run mypy             # type-check
 uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% coverage
 ```
 
+## MCP (query the ingested data)
+
+Ingestion writes a Qdrant collection compatible with the official
+[`mcp-server-qdrant`](https://github.com/qdrant/mcp-server-qdrant), so MCP
+clients (Claude Code, opencode, pi.dev) can run semantic search over your
+ingested files. See [docs/mcp.md](docs/mcp.md).
+
 ## License
 
 This project is licensed under the MIT License — see [LICENSE](LICENSE).
