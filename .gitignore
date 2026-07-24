@@ -2,6 +2,10 @@
 raw/*
 !raw/.gitkeep
 
+# Qdrant local storage (bind mount) — keep the folder, ignore its contents
+qdrant_storage/*
+!qdrant_storage/.gitkeep
+
 # Byte-compiled / optimized / caches
 __pycache__/
 *.py[cod]
