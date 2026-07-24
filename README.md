@@ -105,14 +105,24 @@ FASTMCP_HOST=127.0.0.1 FASTMCP_PORT=8000 \
   uvx mcp-server-qdrant --transport sse
 ```
 
-Then point your MCP client (Claude Code, opencode, or pi.dev) at the SSE endpoint
-**`http://127.0.0.1:8000/sse`**. Keep `EMBEDDING_MODEL` as `all-MiniLM-L6-v2`
-(384-dim) so queries match the ingested vectors.
+Remote clients (opencode, pi.dev) connect to that SSE endpoint
+**`http://127.0.0.1:8000/sse`**; Claude Code instead runs the server locally over
+stdio (below), so it needs no separate process and no authentication. Keep
+`EMBEDDING_MODEL` as `all-MiniLM-L6-v2` (384-dim) so queries match the ingested
+vectors.
 
 ### Claude Code
 
+Use **stdio** locally — Claude Code launches the server itself, so there is no
+separate process to run and no authentication (`mcp-server-qdrant` has none, so an
+HTTP/SSE setup would stall on Claude Code's OAuth handshake):
+
 ```bash
-claude mcp add --transport sse qdrant http://127.0.0.1:8000/sse
+claude mcp add qdrant \
+  -e QDRANT_URL=http://localhost:6333 \
+  -e COLLECTION_NAME=Document \
+  -e EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2 \
+  -- uvx mcp-server-qdrant
 ```
 
 Add `--scope project` to write a shared `.mcp.json`, or `--scope user` to enable it
@@ -121,13 +131,25 @@ in every project. The equivalent `.mcp.json` entry:
 ```json
 {
   "mcpServers": {
-    "qdrant": { "type": "sse", "url": "http://127.0.0.1:8000/sse" }
+    "qdrant": {
+      "command": "uvx",
+      "args": ["mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "Document",
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2"
+      }
+    }
   }
 }
 ```
 
-Run `/mcp` to confirm `qdrant` is connected and its `qdrant-find` tool is listed,
-then ask Claude to search your ingested files.
+Restart Claude Code (or reconnect via `/mcp`), confirm `qdrant` is connected and its
+`qdrant-find` tool is listed, then ask Claude to search your ingested files.
+
+> Only use SSE (`claude mcp add --transport sse qdrant http://127.0.0.1:8000/sse`)
+> for a remote/shared server — and note it needs an auth layer, since Claude Code
+> attempts OAuth for HTTP/SSE transports.
 
 ### opencode
 

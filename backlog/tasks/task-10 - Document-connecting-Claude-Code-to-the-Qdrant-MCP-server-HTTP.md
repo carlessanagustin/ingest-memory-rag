@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-24 11:08'
-updated_date: '2026-07-24 12:39'
+updated_date: '2026-07-24 13:00'
 labels: []
 dependencies:
   - TASK-9
@@ -37,6 +37,8 @@ Add a Claude Code subsection under the README MCP section: the claude mcp add co
 
 <!-- SECTION:NOTES:BEGIN -->
 Added a Claude Code subsection to the README MCP section. Verified the command against claude mcp add --help and by running add/get/remove: claude mcp add --transport sse qdrant http://127.0.0.1:8000/sse registers a Type: sse server (get showed Type: sse + URL; removed cleanly). Documented --scope project (shared .mcp.json) vs --scope user, the equivalent .mcp.json (type sse + url), and verifying via /mcp + a sample query.
+
+Post-completion correction: switched the README Claude Code subsection from SSE to stdio. Claude Code runs an OAuth handshake for HTTP/SSE MCP servers, but mcp-server-qdrant has no auth, so an SSE entry stalls at "not authenticated" and fails to connect. The stdio form (claude mcp add qdrant -e QDRANT_URL=... -e COLLECTION_NAME=Document -e EMBEDDING_MODEL=... -- uvx mcp-server-qdrant) has Claude Code spawn the server locally with no auth; verified claude mcp get qdrant reports Status: Connected. SSE remains documented for remote/shared use (needs an auth layer).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
