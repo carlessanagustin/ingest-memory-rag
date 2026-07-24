@@ -45,7 +45,7 @@ down: ## Stop the stack
 	docker compose down
 
 logs: ## Follow the app logs
-	docker compose logs -f app
+	docker compose logs -f app qdrant
 
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov dist build
