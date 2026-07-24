@@ -1,0 +1,38 @@
+# VCS & CI
+.git/
+.github/
+.gitignore
+
+# Python environments & tool caches
+.venv/
+venv/
+env/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local data & secrets (never bake into the image)
+raw/
+qdrant_storage/
+.env
+.env.*
+
+# Dev-only / project management (not needed at runtime)
+tests/
+backlog/
+docker-compose.yml
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# NOTE: README.md, pyproject.toml, uv.lock and src/ are intentionally kept —
+# the project build (hatchling) reads README.md and packages src/.

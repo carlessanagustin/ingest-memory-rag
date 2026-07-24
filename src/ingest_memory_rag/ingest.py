@@ -36,6 +36,10 @@ class IngestionEngine:
         self.text_converter = TextFileToDocument()
         self.markdown_converter = MarkdownToDocument()
 
+    def verify_connection(self) -> None:
+        """Force a round-trip to Qdrant so an unreachable backend fails fast."""
+        self.document_store.count_documents()
+
     def _convert(self, path: Path) -> list[Document]:
         if is_markdown(path):
             result = self.markdown_converter.run(sources=[path])

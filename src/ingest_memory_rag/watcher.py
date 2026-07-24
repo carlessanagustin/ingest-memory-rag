@@ -122,6 +122,7 @@ def _build_default_action(settings: Settings) -> Action:  # pragma: no cover
     from ingest_memory_rag.ingest import IngestionEngine
 
     engine = IngestionEngine(settings)
+    engine.verify_connection()  # fail fast if Qdrant is unreachable
 
     def action(path: Path) -> None:
         try:
@@ -143,7 +144,15 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
     folder.mkdir(parents=True, exist_ok=True)
 
     if action is None:
-        action = _build_default_action(settings)
+        try:
+            action = _build_default_action(settings)
+        except Exception as exc:  # noqa: BLE001 - surface a clear startup error
+            logger.error(
+                "Cannot reach Qdrant at %s — is it running? (%s)",
+                settings.qdrant_url,
+                exc,
+            )
+            raise SystemExit(1) from exc
 
     if settings.scan_on_start:
         logger.info("Scanning existing files under %s", folder)
