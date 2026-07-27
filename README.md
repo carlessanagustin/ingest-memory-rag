@@ -73,16 +73,19 @@ flowchart TD
 
 ### Run the full stack with Docker (recommended)
 
-`docker compose up` starts **both** Qdrant and the ingestion app. The app waits
-until Qdrant is healthy, then watches the bind-mounted `./raw` folder.
+`docker compose up` starts the whole stack — Qdrant, the ingestion `app`, the
+`mcp-qdrant` bridge, and the [LobeChat](https://github.com/lobehub/lobe-chat) UI
+(<http://localhost:3210>). The app waits until Qdrant is healthy, then watches
+the bind-mounted `./raw` folder.
 
 ```bash
-docker compose up --build      # start Qdrant + the app
+docker compose up --build      # start qdrant + app + mcp-qdrant + lobe-chat
 # ...then add or edit a .txt / .md file in ./raw on your host
 docker compose down            # stop everything
 ```
 
 - The app reaches Qdrant over the compose network (`QDRANT_URL=http://qdrant:6333`) — no code change, just env.
+- `mcp-qdrant` serves the ingested collection over MCP so LobeChat can search it — see [MCP → LobeChat](#lobechat-chat-ui-via-docker-compose).
 - `./raw` is bind-mounted into the container, and `WATCH_USE_POLLING=true` is set so
   host changes are detected across the mount (Docker Desktop does not deliver
   native FS events there).
@@ -131,8 +134,9 @@ uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% cover
 
 Ingestion writes a Qdrant collection the official
 [`mcp-server-qdrant`](https://github.com/qdrant/mcp-server-qdrant) can serve, so
-MCP clients (Claude Code, opencode, pi.dev) can run semantic search over your
-ingested files. With Qdrant running and data ingested, start the server over SSE:
+MCP clients (Claude Code, opencode, pi.dev, LobeChat) can run semantic search
+over your ingested files. With Qdrant running and data ingested, start the server
+over SSE:
 
 ```bash
 QDRANT_URL=http://localhost:6333 COLLECTION_NAME=Document \
@@ -146,6 +150,50 @@ Remote clients (opencode, pi.dev) connect to that SSE endpoint
 stdio (below), so it needs no separate process and no authentication. Keep
 `EMBEDDING_MODEL` as `all-MiniLM-L6-v2` (384-dim) so queries match the ingested
 vectors.
+
+### LobeChat (chat UI, via Docker Compose)
+
+`docker compose up` also starts a [LobeChat](https://github.com/lobehub/lobe-chat)
+web UI plus an `mcp-qdrant` bridge that serves your ingested collection over MCP
+(**Streamable HTTP**) — no separate host process. Wiring them together lets you
+*chat* with your ingested files. Qdrant is reached purely through MCP; LobeChat's
+built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
+
+1. **Start the stack** and open the UI:
+
+   ```bash
+   docker compose up --build      # includes lobe-chat + mcp-qdrant
+   ```
+
+   Then browse to <http://localhost:3210>.
+
+2. **Configure an LLM provider** — MCP tools need a model that supports
+   tool/function calling. Either set a key before starting (the `lobe-chat`
+   service reads it from your `.env`)…
+
+   ```dotenv
+   OPENAI_API_KEY=sk-...
+   # or
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+   …or add one in the app under **Settings → AI Service Provider**.
+
+3. **Add the Qdrant MCP plugin.** In LobeChat's plugin/tool store, add a custom
+   MCP plugin with:
+
+   - **Type:** `Streamable HTTP`
+   - **URL:** `http://mcp-qdrant:8000/mcp`
+
+   LobeChat connects to MCP servers **server-side**, from inside its container, so
+   use the compose service name `mcp-qdrant` (not `localhost`). The bridge is also
+   published on the host at `http://localhost:8000/mcp` for a LobeChat running
+   outside this compose network.
+
+4. **Verify.** Enable the plugin in a chat and ask something answerable only from
+   your ingested files, e.g. *"Use qdrant-find to search my notes for agentic
+   coding and summarise what you find."* LobeChat invokes the `qdrant-find` tool
+   and answers from the ingested content.
 
 ### Claude Code
 
