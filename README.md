@@ -12,6 +12,43 @@ the same code runs unchanged everywhere.
 
 ## How it works
 
+At a systems level there are two paths: a **write path** that keeps Qdrant in
+sync with your files, and a **read path** that lets MCP clients query them.
+
+```mermaid
+flowchart LR
+    subgraph host["Your machine"]
+        raw[["./raw folder<br/>.txt / .md files"]]
+        clients["MCP clients<br/>Claude Code / opencode / pi.dev"]
+    end
+
+    subgraph app["ingest-memory-rag"]
+        watch["File watcher<br/>+ debounce"]
+        ingest["Ingestion service<br/>chunk + embed"]
+    end
+
+    model["Embedding model<br/>all-MiniLM-L6-v2"]
+    mcp["mcp-server-qdrant<br/>semantic search"]
+    qdrant[("Qdrant<br/>vector database")]
+
+    raw -->|add / update| watch
+    watch --> ingest
+    ingest <-->|vectors| model
+    ingest -->|upsert chunks| qdrant
+
+    clients -->|query| mcp
+    mcp -->|search| qdrant
+    qdrant -->|matches| mcp
+    mcp -->|results| clients
+```
+
+Each chunk is tagged with `meta.source_file`; on update the engine deletes all
+chunks with that `source_file` before writing the new ones, so the store never
+accumulates stale content.
+
+<details>
+<summary>Detailed pipeline (code-level view)</summary>
+
 ```mermaid
 flowchart TD
     A[".txt / .md file in ./raw"] --> B["watchdog event"]
@@ -25,8 +62,7 @@ flowchart TD
     I --> Q[("Qdrant")]
 ```
 
-Each chunk is tagged with `meta.source_file`; on update the engine deletes all
-chunks with that `source_file` before writing the new ones.
+</details>
 
 ## Requirements
 
