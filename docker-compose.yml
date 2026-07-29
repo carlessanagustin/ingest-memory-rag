@@ -15,6 +15,14 @@ services:
       timeout: 3s
       retries: 12
       start_period: 3s
+    deploy:
+      resources: # tunable
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
   app:
     build: .
@@ -30,7 +38,24 @@ services:
       WATCH_USE_POLLING: "true"
     volumes:
       - ./raw:/app/raw
+    healthcheck:
+      # No HTTP server of its own; readiness = can it reach its hard
+      # dependency (Qdrant) at the configured URL. urlopen raises on failure
+      # -> non-zero exit -> unhealthy.
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen(os.environ['QDRANT_URL'].rstrip('/')+'/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
+    deploy:
+      resources: # tunable; runs fastembed on the startup scan
+        limits:
+          cpus: "2"
+          memory: 1.5G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
   mcp-qdrant:
     # Bridge that lets MCP clients (e.g. LobeChat) semantically search the
@@ -60,6 +85,14 @@ services:
       retries: 18
       start_period: 120s
     restart: unless-stopped
+    deploy:
+      resources: # tunable; runs fastembed for queries
+        limits:
+          cpus: "2"
+          memory: 1.5G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
 
   ollama:
     image: ollama/ollama:latest
@@ -76,16 +109,22 @@ services:
       retries: 12
       start_period: 30s
     restart: unless-stopped
+    deploy:
+      resources: # tunable; must fit qwen3.6:27b - the Docker Desktop VM must actually be allocated this much RAM
+        limits:
+          cpus: "6" # capped from 8: Docker Desktop VM only has 6 CPUs allocated
+          memory: 24G
+        reservations:
+          cpus: "1"
+          memory: 2G
     # Docker Desktop (macOS/Windows) has no GPU passthrough, so this runs
     # CPU-only. On a Linux host with an NVIDIA GPU + nvidia-container-toolkit,
     # uncomment the block below to enable GPU acceleration:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    #   reservations:
+    #     devices:
+    #       - driver: nvidia
+    #         count: all
+    #         capabilities: [gpu]
 
   ollama-pull:
     # One-shot puller: targets the ollama service over the network so the
