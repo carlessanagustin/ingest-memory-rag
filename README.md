@@ -1,10 +1,13 @@
 # ingest-memory-rag
 
 Watches a folder and, whenever a `*.txt` or `*.md` file is **added or updated**,
-ingests it into a [Qdrant](https://qdrant.tech/documentation/) vector database
-through a [Haystack](https://docs.haystack.deepset.ai/docs/intro) indexing
-pipeline. Re-ingesting a changed file replaces its previous chunks, so the store
-never accumulates stale content.
+ingests it into a [Qdrant](https://qdrant.tech/documentation/) vector database:
+[Haystack](https://docs.haystack.deepset.ai/docs/intro) converters and a splitter
+parse and chunk the file, [fastembed](https://github.com/qdrant/fastembed) turns
+each chunk into a vector, and the
+[qdrant-client](https://github.com/qdrant/qdrant-client) upserts them. Re-ingesting
+a changed file replaces its previous chunks, so the store never accumulates stale
+content.
 
 File watching is cross-platform via [`watchdog`](https://github.com/gorakhargosh/watchdog):
 inotify on Linux, FSEvents/kqueue on macOS, ReadDirectoryChangesW on Windows —
@@ -13,33 +16,32 @@ the same code runs unchanged everywhere.
 ## How it works
 
 At a systems level there are two paths: a **write path** that keeps Qdrant in
-sync with your files, and a **read path** that lets MCP clients query them.
+sync with your files, and a **read path** that lets MCP clients — the CLI agents
+and the LobeChat UI — query them, with LobeChat able to answer using a local
+Ollama model. The full Docker Compose stack:
 
 ```mermaid
 flowchart LR
-    subgraph host["Your machine"]
-        raw[["./raw folder<br/>.txt / .md files"]]
-        clients["MCP clients<br/>Claude Code / opencode / pi.dev"]
-    end
-
-    subgraph app["ingest-memory-rag"]
-        watch["File watcher<br/>+ debounce"]
-        ingest["Ingestion service<br/>chunk + embed"]
-    end
-
+    raw[["./raw folder<br/>.txt / .md files"]]
+    cli["CLI MCP clients<br/>Claude Code / opencode / pi.dev"]
     model["Embedding model<br/>all-MiniLM-L6-v2"]
-    mcp["mcp-server-qdrant<br/>semantic search"]
-    qdrant[("Qdrant<br/>vector database")]
 
-    raw -->|add / update| watch
-    watch --> ingest
-    ingest <-->|vectors| model
-    ingest -->|upsert chunks| qdrant
+    subgraph stack["Docker Compose stack"]
+        app["app<br/>watch + chunk + embed"]
+        qdrant[("qdrant<br/>vector database")]
+        mcp["mcp-qdrant<br/>MCP search bridge"]
+        lobe["lobe-chat<br/>chat UI"]
+        ollama["ollama<br/>local LLM · qwen3.6:27b"]
+    end
 
-    clients -->|query| mcp
-    mcp -->|search| qdrant
-    qdrant -->|matches| mcp
-    mcp -->|results| clients
+    raw -->|add / update| app
+    app <-->|vectors| model
+    app -->|upsert chunks| qdrant
+
+    cli -->|MCP query| mcp
+    lobe -->|MCP query| mcp
+    mcp <-->|search / matches| qdrant
+    lobe <-->|chat| ollama
 ```
 
 Each chunk is tagged with `meta.source_file`; on update the engine deletes all
@@ -57,8 +59,8 @@ flowchart TD
     D --> E["convert<br/>TextFileToDocument / MarkdownToDocument"]
     E --> F["delete prior chunks<br/>(by meta.source_file)"]
     F --> G["DocumentSplitter"]
-    G --> H["SentenceTransformersDocumentEmbedder"]
-    H --> I["DocumentWriter"]
+    G --> H["embed<br/>fastembed TextEmbedding"]
+    H --> I["upsert<br/>qdrant-client"]
     I --> Q[("Qdrant")]
 ```
 
@@ -91,6 +93,19 @@ docker compose down            # stop everything
 - `./raw` is bind-mounted into the container, and `WATCH_USE_POLLING=true` is set so
   host changes are detected across the mount (Docker Desktop does not deliver
   native FS events there).
+
+**Compose services**
+
+| service | image | host port(s) | purpose |
+| --- | --- | --- | --- |
+| `qdrant` | `qdrant/qdrant:latest` | 6333 (REST + web UI `/dashboard`), 6334 (gRPC) | Vector database storing the ingested chunks |
+| `app` | built from `.` (`ingest-memory-rag`) | none | Watches `./raw` and ingests `.txt`/`.md` into Qdrant |
+| `mcp-qdrant` | `ghcr.io/astral-sh/uv` (runs `mcp-server-qdrant`) | 8000 (Streamable HTTP, `/mcp`) | MCP bridge for semantic search over the collection |
+| `ollama` | `ollama/ollama:latest` | 11434 | Local LLM server (provider for LobeChat) |
+| `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls `qwen3.6:27b` into `ollama`, then exits |
+| `lobe-chat` | `lobehub/lobe-chat:1.143.3` | 3210 | Chat UI; RAG via `mcp-qdrant`, models via Ollama/OpenAI/Anthropic |
+
+Every long-running service (`qdrant`, `app`, `mcp-qdrant`, `ollama`, `lobe-chat`) has a healthcheck and CPU/memory resource limits — see `docker-compose.yml`. `ollama-pull` is a one-shot job with no healthcheck.
 
 ### Run locally (development)
 
