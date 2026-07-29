@@ -6,6 +6,10 @@ raw/*
 qdrant_storage/*
 !qdrant_storage/.gitkeep
 
+# Ollama local storage (bind mount) — keep the folder, ignore its contents
+ollama_storage/*
+!ollama_storage/.gitkeep
+
 # Byte-compiled / optimized / caches
 __pycache__/
 *.py[cod]

@@ -74,18 +74,20 @@ flowchart TD
 ### Run the full stack with Docker (recommended)
 
 `docker compose up` starts the whole stack — Qdrant, the ingestion `app`, the
-`mcp-qdrant` bridge, and the [LobeChat](https://github.com/lobehub/lobe-chat) UI
-(<http://localhost:3210>). The app waits until Qdrant is healthy, then watches
-the bind-mounted `./raw` folder.
+`mcp-qdrant` bridge, the [LobeChat](https://github.com/lobehub/lobe-chat) UI
+(<http://localhost:3210>), and a local `ollama` server (with `ollama-pull`
+fetching the `qwen3.6:27b` model into it). The app waits until Qdrant is
+healthy, then watches the bind-mounted `./raw` folder.
 
 ```bash
-docker compose up --build      # start qdrant + app + mcp-qdrant + lobe-chat
+docker compose up --build      # start qdrant + app + mcp-qdrant + lobe-chat + ollama (+ ollama-pull)
 # ...then add or edit a .txt / .md file in ./raw on your host
 docker compose down            # stop everything
 ```
 
 - The app reaches Qdrant over the compose network (`QDRANT_URL=http://qdrant:6333`) — no code change, just env.
 - `mcp-qdrant` serves the ingested collection over MCP so LobeChat can search it — see [MCP → LobeChat](#lobechat-chat-ui-via-docker-compose).
+- `ollama` + `ollama-pull` give LobeChat a local model provider — see [Local model via Ollama](#local-model-via-ollama).
 - `./raw` is bind-mounted into the container, and `WATCH_USE_POLLING=true` is set so
   host changes are detected across the mount (Docker Desktop does not deliver
   native FS events there).
@@ -194,6 +196,27 @@ built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
    your ingested files, e.g. *"Use qdrant-find to search my notes for agentic
    coding and summarise what you find."* LobeChat invokes the `qdrant-find` tool
    and answers from the ingested content.
+
+#### Local model via Ollama
+
+`docker compose up` also brings up an `ollama` service and an `ollama-pull`
+one-shot job that fetches `qwen3.6:27b` into it (persisted in
+`./ollama_storage`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
+`OLLAMA_PROXY_URL=http://ollama:11434`). `lobe-chat` waits for `ollama` to be
+healthy before starting, so the model is available as soon as the UI is up —
+no API key required.
+
+1. In LobeChat, open **Settings → AI Service Provider** and select **Ollama**.
+2. Pick **`qwen3.6:27b`** as the model (it's already pulled by `ollama-pull`).
+3. Chat as usual — requests now go to the in-network `ollama` server instead of
+   OpenAI/Anthropic.
+
+> **CPU-only + high-RAM caveat:** Docker Desktop has no GPU passthrough, so
+> `ollama` runs CPU-only (see the commented GPU block in `docker-compose.yml`
+> for a Linux + NVIDIA host). A 27B model on CPU is slow to respond and needs a
+> large amount of RAM (tens of GB) — expect noticeably higher latency than the
+> hosted OpenAI/Anthropic providers, and make sure Docker Desktop's VM has
+> enough memory allocated before trying it.
 
 ### Claude Code
 

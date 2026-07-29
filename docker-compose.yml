@@ -61,10 +61,54 @@ services:
       start_period: 120s
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434" # API (http://localhost:11434, http://ollama:11434 in-network)
+    volumes:
+      - ./ollama_storage:/root/.ollama
+    healthcheck:
+      # `ollama list` only succeeds once the API server is actually serving.
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    # Docker Desktop (macOS/Windows) has no GPU passthrough, so this runs
+    # CPU-only. On a Linux host with an NVIDIA GPU + nvidia-container-toolkit,
+    # uncomment the block below to enable GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  ollama-pull:
+    # One-shot puller: targets the ollama service over the network so the
+    # model lands in its persisted ./ollama_storage volume, not a separate
+    # embedded server inside this container. Re-running is a no-op once the
+    # model is already present.
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "qwen3.6:27b"]
+    restart: "no"
+
   lobe-chat:
     image: lobehub/lobe-chat:1.143.3
     container_name: lobe-chat
     restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
     ports:
       - "3210:3210"
     healthcheck:
@@ -87,6 +131,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_PROXY_URL: ${OPENAI_PROXY_URL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Local Ollama provider (served by the ollama/ollama-pull services below).
+      ENABLED_OLLAMA: "1"
+      OLLAMA_PROXY_URL: http://ollama:11434
     deploy:
       resources:
         limits:
