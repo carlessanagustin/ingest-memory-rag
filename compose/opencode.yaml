@@ -16,6 +16,7 @@ services:
     environment:
       OPENCODE_CONFIG: /root/.config/opencode/opencode.json
       # Empty default = local no-auth; set this to secure network access.
+      OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME:-}
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
     volumes:
       - ./storage/opencode:/root/.local/share/opencode # persisted auth/sessions/data (XDG data dir)
