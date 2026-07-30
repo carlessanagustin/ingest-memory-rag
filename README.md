@@ -197,6 +197,12 @@ built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
 
    …or add one in the app under **Settings → AI Service Provider**.
 
+   The local **Ollama** provider (`qwen3.5:9b`) is enabled by default and needs no
+   key, but a 9B model is only *moderately* reliable at tool-calling — it may emit
+   the `qdrant-find` call without acting on the result. Prompt it explicitly
+   (*"use qdrant-find …"*) and retry if needed; for consistently DB-grounded
+   answers prefer a cloud model (OpenAI/Anthropic) via a key above.
+
 3. **Add the Qdrant MCP plugin.** In LobeChat's plugin/tool store, add a custom
    MCP plugin with:
 
