@@ -13,7 +13,7 @@ services:
       # Skips first-run admin signup for easier local verification.
       WEBUI_AUTH: "False"
     volumes:
-      - ./storage_openwebui:/app/backend/data
+      - ./storage/openwebui:/app/backend/data
     healthcheck:
       test: [
           "CMD",

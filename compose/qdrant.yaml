@@ -6,7 +6,7 @@ services:
       - "6333:6333" # REST + web UI (http://localhost:6333/dashboard)
       - "6334:6334" # gRPC
     volumes:
-      - ./storage_qdrant:/qdrant/storage
+      - ./storage/qdrant:/qdrant/storage
     healthcheck:
       # The image ships bash but no curl/wget; a /dev/tcp probe confirms the
       # REST port is accepting connections (i.e. Qdrant is up).

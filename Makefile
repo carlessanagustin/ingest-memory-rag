@@ -50,30 +50,30 @@ logs: ## Follow the app logs
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov dist build
 
-reset: ## Wipe storage_qdrant/, storage_ollama/, storage_openwebui/ and storage_opencode/ (deletes the pulled model + ingested vectors + OpenWebUI state + opencode state) and stop the stack; rebuild with `make up`
-	@echo "WARNING: this will delete storage_qdrant/, storage_ollama/, storage_openwebui/ and storage_opencode/, including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions)."; \
+reset: ## Wipe storage/ (qdrant, ollama, openwebui, opencode data) (deletes the pulled model + ingested vectors + OpenWebUI state + opencode state) and stop the stack; rebuild with `make up`
+	@echo "WARNING: this will delete storage/ (qdrant, ollama, openwebui, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions)."; \
 	echo "These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
 	if [ "$$reply" = "y" ] || [ "$$reply" = "Y" ]; then \
 		docker compose down --remove-orphans && \
-		rm -rf storage_qdrant storage_ollama storage_openwebui storage_opencode && \
-		mkdir -p storage_qdrant storage_ollama storage_openwebui storage_opencode && \
-		touch storage_qdrant/.gitkeep storage_ollama/.gitkeep storage_openwebui/.gitkeep storage_opencode/.gitkeep && \
+		rm -rf storage && \
+		mkdir -p storage && \
+		touch storage/.gitkeep && \
 		echo "Reset complete."; \
 	else \
 		echo "Aborted. Nothing was deleted."; \
 	fi
 
 reset-hard: ## Like reset, plus remove the built app image and prune dangling images/build cache for a from-scratch rebuild
-	@echo "WARNING: this will delete storage_qdrant/, storage_ollama/, storage_openwebui/ and storage_opencode/, including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions),"; \
+	@echo "WARNING: this will delete storage/ (qdrant, ollama, openwebui, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions),"; \
 	echo "AND remove the locally-built app image and prune dangling images and build cache."; \
 	echo "These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
 	if [ "$$reply" = "y" ] || [ "$$reply" = "Y" ]; then \
 		docker compose down --rmi local --remove-orphans && \
-		rm -rf storage_qdrant storage_ollama storage_openwebui storage_opencode && \
-		mkdir -p storage_qdrant storage_ollama storage_openwebui storage_opencode && \
-		touch storage_qdrant/.gitkeep storage_ollama/.gitkeep storage_openwebui/.gitkeep storage_opencode/.gitkeep && \
+		rm -rf storage && \
+		mkdir -p storage && \
+		touch storage/.gitkeep && \
 		docker image prune -f && \
 		docker builder prune -f && \
 		echo "Hard reset complete."; \

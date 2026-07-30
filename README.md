@@ -270,7 +270,7 @@ offset).
 
 `docker compose up` also brings up an `ollama` service and an `ollama-pull`
 one-shot job that fetches `qwen3.6:27b` into it (persisted in
-`./storage_ollama`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
+`./storage/ollama`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
 `OLLAMA_PROXY_URL=http://ollama:11434`). `lobe-chat` waits for `ollama` to be
 healthy before starting, so the model is available as soon as the UI is up —
 no API key required.
@@ -306,7 +306,7 @@ Then browse to <http://localhost:4096>.
   provider (`http://ollama:11434/v1`) and exposes the pulled model `qwen3.5:9b`.
   Select it in the model picker — no external API key required. The service waits
   for `ollama` to be healthy before starting.
-- **Data & auth.** Sessions and auth persist in `./storage_opencode` (mounted at
+- **Data & auth.** Sessions and auth persist in `./storage/opencode` (mounted at
   `/root/.local/share/opencode`).
 - **Ingested-docs search (RAG).** The Qdrant MCP bridge is pre-wired in
   `compose/opencode/opencode.json` at `http://mcp-qdrant:8000/mcp`. opencode

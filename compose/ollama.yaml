@@ -5,7 +5,7 @@ services:
     ports:
       - "11434:11434" # API (http://localhost:11434, http://ollama:11434 in-network)
     volumes:
-      - ./storage_ollama:/root/.ollama
+      - ./storage/ollama:/root/.ollama
     healthcheck:
       # `ollama list` only succeeds once the API server is actually serving.
       test: ["CMD", "ollama", "list"]
@@ -33,7 +33,7 @@ services:
 
   ollama-pull:
     # One-shot puller: targets the ollama service over the network so the
-    # model lands in its persisted ./storage_ollama volume, not a separate
+    # model lands in its persisted ./storage/ollama volume, not a separate
     # embedded server inside this container. Re-running is a no-op once the
     # model is already present.
     image: ollama/ollama:latest

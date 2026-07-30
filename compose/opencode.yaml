@@ -18,7 +18,7 @@ services:
       # Empty default = local no-auth; set this to secure network access.
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
     volumes:
-      - ./storage_opencode:/root/.local/share/opencode # persisted auth/sessions/data (XDG data dir)
+      - ./storage/opencode:/root/.local/share/opencode # persisted auth/sessions/data (XDG data dir)
       - ./compose/opencode/opencode.json:/root/.config/opencode/opencode.json:ro # provider config
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/4096"]

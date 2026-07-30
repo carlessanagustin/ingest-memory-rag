@@ -2,21 +2,9 @@
 raw/*
 !raw/.gitkeep
 
-# Qdrant local storage (bind mount) — keep the folder, ignore its contents
-storage_qdrant/*
-!storage_qdrant/.gitkeep
-
-# Ollama local storage (bind mount) — keep the folder, ignore its contents
-storage_ollama/*
-!storage_ollama/.gitkeep
-
-# Open WebUI local storage (bind mount) — keep the folder, ignore its contents
-storage_openwebui/*
-!storage_openwebui/.gitkeep
-
-# opencode local storage (bind mount) — keep the folder, ignore its contents
-storage_opencode/*
-!storage_opencode/.gitkeep
+# Service storage (bind mounts) — keep the folder, ignore its contents
+storage/*
+!storage/.gitkeep
 
 # Byte-compiled / optimized / caches
 __pycache__/

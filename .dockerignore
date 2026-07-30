@@ -19,10 +19,7 @@ htmlcov/
 
 # Local data & secrets (never bake into the image)
 raw/
-storage_qdrant/
-storage_ollama/
-storage_openwebui/
-storage_opencode/
+storage/
 .env
 .env.*
 
