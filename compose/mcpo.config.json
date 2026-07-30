@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "qdrant": {
-      "type": "streamable-http",
-      "url": "http://mcp-qdrant:8000/mcp"
-    }
-  }
-}

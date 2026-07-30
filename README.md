@@ -23,7 +23,7 @@ Ollama model. The full Docker Compose stack:
 ```mermaid
 flowchart LR
     raw[["./raw folder<br/>.txt / .md files"]]
-    cli["CLI MCP clients<br/>Claude Code / opencode / pi.dev"]
+    cli["CLI MCP clients<br/>Claude Code / pi.dev"]
     model["Embedding model<br/>all-MiniLM-L6-v2"]
 
     subgraph stack["Docker Compose stack"]
@@ -31,7 +31,8 @@ flowchart LR
         qdrant[("qdrant<br/>vector database")]
         mcp["mcp-qdrant<br/>MCP search bridge"]
         lobe["lobe-chat<br/>chat UI"]
-        ollama["ollama<br/>local LLM · qwen3.6:27b"]
+        opencode["opencode<br/>web coding agent"]
+        ollama["ollama<br/>local LLM · qwen3.5:9b"]
     end
 
     raw -->|add / update| app
@@ -40,8 +41,10 @@ flowchart LR
 
     cli -->|MCP query| mcp
     lobe -->|MCP query| mcp
+    opencode -->|MCP query| mcp
     mcp <-->|search / matches| qdrant
     lobe <-->|chat| ollama
+    opencode <-->|chat| ollama
 ```
 
 Each chunk is tagged with `meta.source_file`; on update the engine deletes all
@@ -78,7 +81,7 @@ flowchart TD
 `docker compose up` starts the whole stack — Qdrant, the ingestion `app`, the
 `mcp-qdrant` bridge, the [LobeChat](https://github.com/lobehub/lobe-chat) UI
 (<http://localhost:3210>), and a local `ollama` server (with `ollama-pull`
-fetching the `qwen3.6:27b` model into it). The app waits until Qdrant is
+fetching the `qwen3.5:9b` model into it). The app waits until Qdrant is
 healthy, then watches the bind-mounted `./raw` folder.
 
 ```bash
@@ -102,7 +105,7 @@ docker compose down            # stop everything
 | `app` | built from `.` (`ingest-memory-rag`) | none | Watches `./raw` and ingests `.txt`/`.md` into Qdrant |
 | `mcp-qdrant` | `ghcr.io/astral-sh/uv` (runs `mcp-server-qdrant`) | 8000 (Streamable HTTP, `/mcp`) | MCP bridge for semantic search over the collection |
 | `ollama` | `ollama/ollama:latest` | 11434 | Local LLM server (provider for LobeChat) |
-| `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls `qwen3.6:27b` into `ollama`, then exits |
+| `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls `qwen3.5:9b` into `ollama`, then exits |
 | `lobe-chat` | `lobehub/lobe-chat:1.143.3` | 3210 | Chat UI; RAG via `mcp-qdrant`, models via Ollama/OpenAI/Anthropic |
 | `opencode` | built from `compose/opencode/` (`ubuntu:26.04` + opencode) | 4096 | Web coding agent; uses the local Ollama provider |
 
@@ -219,77 +222,24 @@ built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
    coding and summarise what you find."* LobeChat invokes the `qdrant-find` tool
    and answers from the ingested content.
 
-### OpenWebUI (tool server via mcpo)
-
-[OpenWebUI](https://github.com/open-webui/open-webui) (`openwebui` service, host
-port 3000) has no native MCP client — it only consumes tools exposed as OpenAPI
-"tool servers". [`mcpo`](https://github.com/open-webui/mcpo) bridges the gap: it
-connects to `mcp-qdrant` over Streamable HTTP (`http://mcp-qdrant:8000/mcp`,
-per `compose/mcpo.config.json`) and re-exposes its tools (`qdrant-find`,
-`qdrant-store`) as a REST/OpenAPI server. `docker compose up` starts `mcpo`
-alongside `mcp-qdrant`; it publishes its OpenAPI server on host port **8001**
-(container port 8000 — `mcp-qdrant` already owns host port 8000, hence the
-offset).
-
-1. **Start the stack**:
-
-   ```bash
-   docker compose up --build      # includes openwebui + mcp-qdrant + mcpo
-   ```
-
-   Then browse to <http://localhost:3000>.
-
-2. **Register the tool server.** In OpenWebUI, open **Settings → Tools**
-   (or **Admin Panel → Settings → Tools**, depending on version) and add a new
-   OpenAPI tool server. mcpo mounts each configured MCP server under a path
-   named after it, so:
-
-   - **URL:** `http://mcpo:8000/qdrant` (OpenWebUI calls this server-side,
-     from inside its container, so use the compose service name `mcpo` — not
-     `localhost`)
-   - Its OpenAPI schema lives at `http://mcpo:8000/qdrant/openapi.json` and an
-     interactive Swagger UI at `http://mcpo:8000/qdrant/docs`. From the host
-     (e.g. to inspect it with `curl` or a browser), the same paths are
-     published at `http://localhost:8001/qdrant/openapi.json` and
-     `http://localhost:8001/qdrant/docs`.
-   - No API key is configured (local-only setup); leave that field blank.
-
-3. **Verify.** Enable the tool server for a model/chat and ask something
-   answerable only from your ingested files, e.g. *"Use qdrant-find to search
-   my notes for agentic coding and summarise what you find."* OpenWebUI calls
-   the tool server's `POST /qdrant/qdrant-find` operation (body:
-   `{"query": "..."}`) and answers from the ingested content. You can sanity-check
-   the same call directly:
-
-   ```bash
-   curl -s -X POST http://localhost:8001/qdrant/qdrant-find \
-     -H 'Content-Type: application/json' \
-     -d '{"query": "agentic coding"}'
-   ```
-
-   **Note:** this MCP-via-mcpo path queries the `Document` collection that the
-   `app` service ingests from `./raw`. OpenWebUI also ships its own native RAG
-   feature (`VECTOR_DB=qdrant` in its env-config docs) — that is a *different*,
-   unrelated feature and is intentionally **not** configured or used here.
-
 #### Local model via Ollama
 
 `docker compose up` also brings up an `ollama` service and an `ollama-pull`
-one-shot job that fetches `qwen3.6:27b` into it (persisted in
+one-shot job that fetches `qwen3.5:9b` into it (persisted in
 `./storage/ollama`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
 `OLLAMA_PROXY_URL=http://ollama:11434`). `lobe-chat` waits for `ollama` to be
 healthy before starting, so the model is available as soon as the UI is up —
 no API key required.
 
 1. In LobeChat, open **Settings → AI Service Provider** and select **Ollama**.
-2. Pick **`qwen3.6:27b`** as the model (it's already pulled by `ollama-pull`).
+2. Pick **`qwen3.5:9b`** as the model (it's already pulled by `ollama-pull`).
 3. Chat as usual — requests now go to the in-network `ollama` server instead of
    OpenAI/Anthropic.
 
-> **CPU-only + high-RAM caveat:** Docker Desktop has no GPU passthrough, so
+> **CPU-only caveat:** Docker Desktop has no GPU passthrough, so
 > `ollama` runs CPU-only (see the commented GPU block in `docker-compose.yml`
-> for a Linux + NVIDIA host). A 27B model on CPU is slow to respond and needs a
-> large amount of RAM (tens of GB) — expect noticeably higher latency than the
+> for a Linux + NVIDIA host). A 9B model on CPU still responds slowly but is much
+> lighter (`qwen3.5:9b` is ~6.6 GB) — expect higher latency than the
 > hosted OpenAI/Anthropic providers, and make sure Docker Desktop's VM has
 > enough memory allocated before trying it.
 

@@ -50,8 +50,8 @@ logs: ## Follow the app logs
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov dist build
 
-reset: ## Wipe storage/ (qdrant, ollama, openwebui, opencode data) (deletes the pulled model + ingested vectors + OpenWebUI state + opencode state) and stop the stack; rebuild with `make up`
-	@echo "WARNING: this will delete storage/ (qdrant, ollama, openwebui, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions)."; \
+reset: ## Wipe storage/ (qdrant, ollama, opencode data) (deletes the pulled model + ingested vectors + opencode state) and stop the stack; rebuild with `make up`
+	@echo "WARNING: this will delete storage/ (qdrant, ollama, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, and opencode state (auth/sessions)."; \
 	echo "These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
 	if [ "$$reply" = "y" ] || [ "$$reply" = "Y" ]; then \
@@ -65,7 +65,7 @@ reset: ## Wipe storage/ (qdrant, ollama, openwebui, opencode data) (deletes the 
 	fi
 
 reset-hard: ## Like reset, plus remove the built app image and prune dangling images/build cache for a from-scratch rebuild
-	@echo "WARNING: this will delete storage/ (qdrant, ollama, openwebui, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, OpenWebUI state, and opencode state (auth/sessions),"; \
+	@echo "WARNING: this will delete storage/ (qdrant, ollama, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, and opencode state (auth/sessions),"; \
 	echo "AND remove the locally-built app image and prune dangling images and build cache."; \
 	echo "These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
