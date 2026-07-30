@@ -1,43 +1,46 @@
-# lobe-chat is disabled for now. Uncomment the service block below (and its
-# `include` entry in the top-level docker-compose.yml) to re-enable it.
-#
-# services:
-#   lobe-chat:
-#     image: lobehub/lobe-chat:1.143.3
-#     container_name: lobe-chat
-#     restart: unless-stopped
-#     depends_on:
-#       ollama:
-#         condition: service_healthy
-#     ports:
-#       - "3210:3210"
-#     healthcheck:
-#       test: [
-#           "CMD",
-#           "/bin/node",
-#           "-e",
-#           "require('http').get('http://localhost:3210/health', (r) =>
-#           process.exit(r.statusCode === 200 ? 0 : 1))",
-#         ]
-#       interval: 30s
-#       start_period: 90s
-#       timeout: 20s
-#       retries: 3
-#     environment:
-#       # No provider is baked in — set keys here (via .env) or in the LobeChat UI.
-#       # Empty defaults keep compose quiet when a var is unset; no secrets in git.
-#       ACCESS_CODE: ${LOBE_ACCESS_CODE:-}
-#       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-#       OPENAI_PROXY_URL: ${OPENAI_PROXY_URL:-}
-#       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-#       # Local Ollama provider (served by the ollama/ollama-pull services below).
-#       ENABLED_OLLAMA: "1"
-#       OLLAMA_PROXY_URL: http://ollama:11434
-#     deploy:
-#       resources:
-#         limits:
-#           cpus: "1"
-#           memory: 1.5G
-#         reservations:
-#           cpus: "0.25"
-#           memory: 512M
+services:
+  lobe-chat:
+    image: lobehub/lobe-chat:1.143.3
+    container_name: lobe-chat
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "3210:3210"
+    healthcheck:
+      test: [
+          "CMD",
+          "/bin/node",
+          "-e",
+          "require('http').get('http://localhost:3210/health', (r) =>
+          process.exit(r.statusCode === 200 ? 0 : 1))",
+        ]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    environment:
+      # No provider is baked in — set keys here (via .env) or in the LobeChat UI.
+      # Empty defaults keep compose quiet when a var is unset; no secrets in git.
+      ACCESS_CODE: ${LOBE_ACCESS_CODE:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_PROXY_URL: ${OPENAI_PROXY_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Local Ollama provider (served by the ollama/ollama-pull services below).
+      ENABLED_OLLAMA: "1"
+      OLLAMA_PROXY_URL: http://ollama:11434
+      # Qdrant
+      VECTOR_DB: ${VECTOR_DB:-}
+      QDRANT_URL: ${QDRANT_URL:-}
+      QDRANT_URI: ${QDRANT_URL:-}
+      QDRANT_COLLECTION_NAME: ${QDRANT_INDEX:-}
+      COLLECTION_NAME: ${QDRANT_INDEX:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1.5G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
