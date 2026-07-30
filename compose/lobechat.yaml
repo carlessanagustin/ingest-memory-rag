@@ -29,7 +29,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # Local Ollama provider (served by the ollama/ollama-pull services below).
       ENABLED_OLLAMA: "1"
-      OLLAMA_PROXY_URL: http://ollama:11434
+      OLLAMA_PROXY_URL: http://localhost:11434
       # Qdrant RAG is via the qdrant-find MCP plugin (added in the LobeChat UI), not the native KB.
     deploy:
       resources:
