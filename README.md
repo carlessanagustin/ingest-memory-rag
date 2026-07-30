@@ -212,11 +212,64 @@ built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
    coding and summarise what you find."* LobeChat invokes the `qdrant-find` tool
    and answers from the ingested content.
 
+### OpenWebUI (tool server via mcpo)
+
+[OpenWebUI](https://github.com/open-webui/open-webui) (`openwebui` service, host
+port 3000) has no native MCP client — it only consumes tools exposed as OpenAPI
+"tool servers". [`mcpo`](https://github.com/open-webui/mcpo) bridges the gap: it
+connects to `mcp-qdrant` over Streamable HTTP (`http://mcp-qdrant:8000/mcp`,
+per `compose/mcpo.config.json`) and re-exposes its tools (`qdrant-find`,
+`qdrant-store`) as a REST/OpenAPI server. `docker compose up` starts `mcpo`
+alongside `mcp-qdrant`; it publishes its OpenAPI server on host port **8001**
+(container port 8000 — `mcp-qdrant` already owns host port 8000, hence the
+offset).
+
+1. **Start the stack**:
+
+   ```bash
+   docker compose up --build      # includes openwebui + mcp-qdrant + mcpo
+   ```
+
+   Then browse to <http://localhost:3000>.
+
+2. **Register the tool server.** In OpenWebUI, open **Settings → Tools**
+   (or **Admin Panel → Settings → Tools**, depending on version) and add a new
+   OpenAPI tool server. mcpo mounts each configured MCP server under a path
+   named after it, so:
+
+   - **URL:** `http://mcpo:8000/qdrant` (OpenWebUI calls this server-side,
+     from inside its container, so use the compose service name `mcpo` — not
+     `localhost`)
+   - Its OpenAPI schema lives at `http://mcpo:8000/qdrant/openapi.json` and an
+     interactive Swagger UI at `http://mcpo:8000/qdrant/docs`. From the host
+     (e.g. to inspect it with `curl` or a browser), the same paths are
+     published at `http://localhost:8001/qdrant/openapi.json` and
+     `http://localhost:8001/qdrant/docs`.
+   - No API key is configured (local-only setup); leave that field blank.
+
+3. **Verify.** Enable the tool server for a model/chat and ask something
+   answerable only from your ingested files, e.g. *"Use qdrant-find to search
+   my notes for agentic coding and summarise what you find."* OpenWebUI calls
+   the tool server's `POST /qdrant/qdrant-find` operation (body:
+   `{"query": "..."}`) and answers from the ingested content. You can sanity-check
+   the same call directly:
+
+   ```bash
+   curl -s -X POST http://localhost:8001/qdrant/qdrant-find \
+     -H 'Content-Type: application/json' \
+     -d '{"query": "agentic coding"}'
+   ```
+
+   **Note:** this MCP-via-mcpo path queries the `Document` collection that the
+   `app` service ingests from `./raw`. OpenWebUI also ships its own native RAG
+   feature (`VECTOR_DB=qdrant` in its env-config docs) — that is a *different*,
+   unrelated feature and is intentionally **not** configured or used here.
+
 #### Local model via Ollama
 
 `docker compose up` also brings up an `ollama` service and an `ollama-pull`
 one-shot job that fetches `qwen3.6:27b` into it (persisted in
-`./ollama_storage`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
+`./storage_ollama`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
 `OLLAMA_PROXY_URL=http://ollama:11434`). `lobe-chat` waits for `ollama` to be
 healthy before starting, so the model is available as soon as the UI is up —
 no API key required.

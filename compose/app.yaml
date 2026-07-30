@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    container_name: ingest-memory-rag
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      WATCH_FOLDER: /app/raw
+      # Bind-mounted host dirs do not deliver native inotify/FSEvents on
+      # Docker Desktop; poll instead so host changes are detected.
+      WATCH_USE_POLLING: "true"
+    volumes:
+      - ./raw:/app/raw
+    healthcheck:
+      # No HTTP server of its own; readiness = can it reach its hard
+      # dependency (Qdrant) at the configured URL. urlopen raises on failure
+      # -> non-zero exit -> unhealthy.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,urllib.request; urllib.request.urlopen(os.environ['QDRANT_URL'].rstrip('/')+'/healthz', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources: # tunable; runs fastembed on the startup scan
+        limits:
+          cpus: "2"
+          memory: 1.5G
+        reservations:
+          cpus: "0.5"
+          memory: 512M

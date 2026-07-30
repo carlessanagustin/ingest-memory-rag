@@ -1,0 +1,48 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434" # API (http://localhost:11434, http://ollama:11434 in-network)
+    volumes:
+      - ./storage_ollama:/root/.ollama
+    healthcheck:
+      # `ollama list` only succeeds once the API server is actually serving.
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources: # tunable; must fit qwen3.6:27b - the Docker Desktop VM must actually be allocated this much RAM
+        limits:
+          cpus: "6" # capped from 8: Docker Desktop VM only has 6 CPUs allocated
+          memory: 24G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    # Docker Desktop (macOS/Windows) has no GPU passthrough, so this runs
+    # CPU-only. On a Linux host with an NVIDIA GPU + nvidia-container-toolkit,
+    # uncomment the block below to enable GPU acceleration:
+    #   reservations:
+    #     devices:
+    #       - driver: nvidia
+    #         count: all
+    #         capabilities: [gpu]
+
+  ollama-pull:
+    # One-shot puller: targets the ollama service over the network so the
+    # model lands in its persisted ./storage_ollama volume, not a separate
+    # embedded server inside this container. Re-running is a no-op once the
+    # model is already present.
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    #command: ["pull", "qwen3:8b"]
+    command: ["pull", "qwen3.5:9b"]
+    restart: "no"

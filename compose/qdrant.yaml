@@ -1,0 +1,63 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333" # REST + web UI (http://localhost:6333/dashboard)
+      - "6334:6334" # gRPC
+    volumes:
+      - ./storage_qdrant:/qdrant/storage
+    healthcheck:
+      # The image ships bash but no curl/wget; a /dev/tcp probe confirms the
+      # REST port is accepting connections (i.e. Qdrant is up).
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+    deploy:
+      resources: # tunable
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  mcp-qdrant:
+    # Bridge that lets MCP clients (e.g. LobeChat) semantically search the
+    # ingested collection. LobeChat has no native Qdrant support, but its
+    # plugin system speaks MCP over Streamable HTTP, so we expose
+    # mcp-server-qdrant on that transport (endpoint path /mcp).
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    container_name: mcp-qdrant
+    command:
+      ["uvx", "mcp-server-qdrant@0.8.1", "--transport", "streamable-http"]
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      COLLECTION_NAME: Document
+      EMBEDDING_MODEL: sentence-transformers/all-MiniLM-L6-v2
+      # FastMCP 2.x reads the SSE bind address from FASTMCP_SERVER_* (plain
+      # FASTMCP_HOST is ignored); 0.0.0.0 makes it reachable across the network.
+      FASTMCP_SERVER_HOST: 0.0.0.0
+      FASTMCP_SERVER_PORT: "8000"
+    ports:
+      - "8000:8000" # Streamable HTTP endpoint (http://localhost:8000/mcp)
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8000"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources: # tunable; runs fastembed for queries
+        limits:
+          cpus: "2"
+          memory: 1.5G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
