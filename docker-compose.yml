@@ -5,7 +5,9 @@ include:
     project_directory: .
   - path: compose/ollama.yaml
     project_directory: .
-  - path: compose/openwebui.yaml
-    project_directory: .
-  - path: compose/lobechat.yaml
+  #- path: compose/openwebui.yaml
+  #  project_directory: .
+  #- path: compose/lobechat.yaml
+  #  project_directory: .
+  - path: compose/opencode.yaml
     project_directory: .

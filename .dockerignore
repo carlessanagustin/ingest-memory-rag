@@ -22,6 +22,7 @@ raw/
 storage_qdrant/
 storage_ollama/
 storage_openwebui/
+storage_opencode/
 .env
 .env.*
 

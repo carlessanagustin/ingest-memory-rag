@@ -1,0 +1,36 @@
+services:
+  opencode:
+    build:
+      context: ./compose/opencode
+      dockerfile: Dockerfile
+    container_name: opencode
+    command: ["opencode", "web", "--hostname", "0.0.0.0", "--port", "4096"]
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+      mcp-qdrant:
+        condition: service_healthy
+    ports:
+      - "4096:4096"
+    environment:
+      OPENCODE_CONFIG: /root/.config/opencode/opencode.json
+      # Empty default = local no-auth; set this to secure network access.
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
+    volumes:
+      - ./storage_opencode:/root/.local/share/opencode # persisted auth/sessions/data (XDG data dir)
+      - ./compose/opencode/opencode.json:/root/.config/opencode/opencode.json:ro # provider config
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/4096"]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 60s
+    deploy:
+      resources: # tunable
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M

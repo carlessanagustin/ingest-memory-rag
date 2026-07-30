@@ -104,8 +104,9 @@ docker compose down            # stop everything
 | `ollama` | `ollama/ollama:latest` | 11434 | Local LLM server (provider for LobeChat) |
 | `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls `qwen3.6:27b` into `ollama`, then exits |
 | `lobe-chat` | `lobehub/lobe-chat:1.143.3` | 3210 | Chat UI; RAG via `mcp-qdrant`, models via Ollama/OpenAI/Anthropic |
+| `opencode` | built from `compose/opencode/` (`ubuntu:26.04` + opencode) | 4096 | Web coding agent; uses the local Ollama provider |
 
-Every long-running service (`qdrant`, `app`, `mcp-qdrant`, `ollama`, `lobe-chat`) has a healthcheck and CPU/memory resource limits — see `docker-compose.yml`. `ollama-pull` is a one-shot job with no healthcheck.
+Every long-running service (`qdrant`, `app`, `mcp-qdrant`, `ollama`, `lobe-chat`, `opencode`) has a healthcheck and CPU/memory resource limits — see `docker-compose.yml`. `ollama-pull` is a one-shot job with no healthcheck.
 
 ### Run locally (development)
 
@@ -285,6 +286,40 @@ no API key required.
 > large amount of RAM (tens of GB) — expect noticeably higher latency than the
 > hosted OpenAI/Anthropic providers, and make sure Docker Desktop's VM has
 > enough memory allocated before trying it.
+
+### opencode (web coding agent, via Docker Compose)
+
+`docker compose up --build` also builds and starts [opencode](https://opencode.ai)
+— an agentic coding tool — serving its **web UI on host port 4096**. The image is
+built from `ubuntu:26.04` (`compose/opencode/Dockerfile`) using the official
+installer; the container runs `opencode web --hostname 0.0.0.0 --port 4096` so the
+host can reach it.
+
+```bash
+docker compose up --build      # includes opencode + ollama
+```
+
+Then browse to <http://localhost:4096>.
+
+- **Model provider.** opencode is wired to the local `ollama` service via
+  `compose/opencode/opencode.json`, which registers Ollama as an OpenAI-compatible
+  provider (`http://ollama:11434/v1`) and exposes the pulled model `qwen3.5:9b`.
+  Select it in the model picker — no external API key required. The service waits
+  for `ollama` to be healthy before starting.
+- **Data & auth.** Sessions and auth persist in `./storage_opencode` (mounted at
+  `/root/.local/share/opencode`).
+- **Ingested-docs search (RAG).** The Qdrant MCP bridge is pre-wired in
+  `compose/opencode/opencode.json` at `http://mcp-qdrant:8000/mcp`. opencode
+  connects **server-side** from inside the compose network, so it uses the service
+  name `mcp-qdrant` (not `localhost`), and the service waits for `mcp-qdrant` to be
+  healthy before starting. opencode loads the `qdrant-find` tool at startup — ask it
+  to search your ingested notes (e.g. *"use qdrant-find to search my notes for
+  agentic coding and summarise"*) and it answers from the `Document` collection.
+
+> **Security:** the server runs unauthenticated by default
+> (`OPENCODE_SERVER_PASSWORD` empty), which is fine for local use. Set
+> `OPENCODE_SERVER_PASSWORD` (e.g. in your `.env`) before exposing port 4096 on an
+> untrusted network.
 
 ### Claude Code
 
