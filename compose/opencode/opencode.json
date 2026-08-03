@@ -10,6 +10,12 @@
       "models": {
         "qwen3.5:9b": {
           "name": "qwen3.5:9b"
+        },
+        "nemotron-3-nano:4b": {
+          "name": "nemotron-3-nano:4b"
+        },
+        "qwen3:8b": {
+          "name": "qwen3:8b"
         }
       }
     }

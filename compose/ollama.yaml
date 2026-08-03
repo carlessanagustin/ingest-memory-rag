@@ -43,6 +43,6 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    #command: ["pull", "qwen3:8b"]
-    command: ["pull", "qwen3.5:9b"]
+    # options: nemotron-3-nano:4b, qwen3.5:9b, qwen3:8b
+    command: ["pull", "nemotron-3-nano:4b"]
     restart: "no"
