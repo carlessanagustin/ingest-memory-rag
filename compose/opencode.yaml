@@ -18,6 +18,8 @@ services:
       # Empty default = local no-auth; set this to secure network access.
       OPENCODE_SERVER_USERNAME: ${OPENCODE_SERVER_USERNAME:-}
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-}
+      QDRANT_URL: ${QDRANT_URL:-}
+      QDRANT_INDEX: ${QDRANT_INDEX:-}
     volumes:
       - ./storage/opencode:/root/.local/share/opencode # persisted auth/sessions/data (XDG data dir)
       - ./compose/opencode/opencode.json:/root/.config/opencode/opencode.json:ro # provider config

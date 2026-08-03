@@ -21,14 +21,49 @@
     }
   },
   "mcp": {
-    "qdrant": {
+    "qdrant_remote": {
+      "enabled": true,
       "type": "remote",
-      "url": "http://mcp-qdrant:8000/mcp",
-      "enabled": true
+      "url": "http://mcp-qdrant:8000/mcp"
+    },
+    "qdrant_local": {
+      "enabled": false,
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-server-qdrant"
+      ],
+      "environment": {
+        "QDRANT_URL": "{env:QDRANT_URL}",
+        "COLLECTION_NAME": "{env:QDRANT_INDEX}"
+      }
     }
   },
-  "permission": {
-    "webfetch": "deny",
-    "websearch": "deny"
+  "default_agent": "qdrant_only",
+  "agent": {
+    "qdrant_only": {
+      "description": "Answers strictly from the internal knowledge base",
+      "mode": "primary",
+      "temperature": 0,
+      "steps": 6,
+      "prompt": "You have exactly one source of truth: the qdrant_* tools. You must answer questions strictly based on the information available in the qdrant_* tools. If the answer is not found in the qdrant_* tools, respond with 'I don't know.' Do not provide any information that is not present in the qdrant_* tools.",
+      "permission": {
+        "qdrant_remote_*": "allow",
+        "qdrant_local_*": "deny",
+        "read": "deny",
+        "edit": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "deny",
+        "bash": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "task": "deny",
+        "lsp": "deny",
+        "skill": "deny",
+        "todowrite": "deny",
+        "external_directory": "deny"
+      }
+    }
   }
 }
