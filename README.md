@@ -81,7 +81,7 @@ flowchart TD
 `docker compose up` starts the whole stack — Qdrant, the ingestion `app`, the
 `mcp-qdrant` bridge, the [LobeChat](https://github.com/lobehub/lobe-chat) UI
 (<http://localhost:3210>), and a local `ollama` server (with `ollama-pull`
-fetching the `qwen3.5:9b` model into it). The app waits until Qdrant is
+fetching the models listed in `compose/opencode/opencode.json` into it). The app waits until Qdrant is
 healthy, then watches the bind-mounted `./raw` folder.
 
 ```bash
@@ -105,7 +105,7 @@ docker compose down            # stop everything
 | `app` | built from `.` (`ingest-memory-rag`) | none | Watches `./raw` and ingests `.txt`/`.md` into Qdrant |
 | `mcp-qdrant` | `ghcr.io/astral-sh/uv` (runs `mcp-server-qdrant`) | 8000 (Streamable HTTP, `/mcp`) | MCP bridge for semantic search over the collection |
 | `ollama` | `ollama/ollama:latest` | 11434 | Local LLM server (provider for LobeChat) |
-| `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls `qwen3.5:9b` into `ollama`, then exits |
+| `ollama-pull` | `ollama/ollama:latest` | none (one-shot) | One-shot job: pulls the models in `compose/opencode/opencode.json` (`provider.ollama.models`) into `ollama`, then exits |
 | `lobe-chat` | `lobehub/lobe-chat:1.143.3` | 3210 | Chat UI; RAG via `mcp-qdrant`, models via Ollama/OpenAI/Anthropic |
 | `opencode` | built from `compose/opencode/` (`ubuntu:26.04` + opencode) | 4096 | Web coding agent; uses the local Ollama provider |
 
@@ -241,14 +241,14 @@ built-in knowledge base (PostgreSQL/pgvector) is intentionally not used here.
 #### Local model via Ollama
 
 `docker compose up` also brings up an `ollama` service and an `ollama-pull`
-one-shot job that fetches `qwen3.5:9b` into it (persisted in
+one-shot job that fetches the models in `compose/opencode/opencode.json` into it (persisted in
 `./storage/ollama`), and wires `lobe-chat` to it (`ENABLED_OLLAMA=1`,
 `OLLAMA_PROXY_URL=http://ollama:11434`). `lobe-chat` waits for `ollama` to be
 healthy before starting, so the model is available as soon as the UI is up —
 no API key required.
 
 1. In LobeChat, open **Settings → AI Service Provider** and select **Ollama**.
-2. Pick **`qwen3.5:9b`** as the model (it's already pulled by `ollama-pull`).
+2. Pick one of the pulled models (e.g. **`qwen3.5:9b`**) — `ollama-pull` fetches every model listed in `compose/opencode/opencode.json`.
 3. Chat as usual — requests now go to the in-network `ollama` server instead of
    OpenAI/Anthropic.
 

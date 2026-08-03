@@ -15,7 +15,7 @@ services:
       start_period: 30s
     restart: unless-stopped
     deploy:
-      resources: # tunable; must fit qwen3.6:27b - the Docker Desktop VM must actually be allocated this much RAM
+      resources: # tunable; size to the largest model you pull - the Docker Desktop VM must actually be allocated this much RAM
         limits:
           cpus: "6" # capped from 8: Docker Desktop VM only has 6 CPUs allocated
           memory: 24G
@@ -32,10 +32,11 @@ services:
     #         capabilities: [gpu]
 
   ollama-pull:
-    # One-shot puller: targets the ollama service over the network so the
-    # model lands in its persisted ./storage/ollama volume, not a separate
-    # embedded server inside this container. Re-running is a no-op once the
-    # model is already present.
+    # One-shot puller: pulls every model listed under provider.ollama.models
+    # in compose/opencode/opencode.json, targeting the ollama service over the
+    # network so models land in its persisted ./storage/ollama volume, not a
+    # separate embedded server inside this container. Re-running is a no-op
+    # once a model is already present.
     image: ollama/ollama:latest
     container_name: ollama-pull
     depends_on:
@@ -43,6 +44,10 @@ services:
         condition: service_healthy
     environment:
       OLLAMA_HOST: http://ollama:11434
-    # options: nemotron-3-nano:4b, qwen3.5:9b, qwen3:8b
-    command: ["pull", "nemotron-3-nano:4b"]
+      OPENCODE_CONFIG: /config/opencode.json
+    entrypoint: ["/bin/bash"]
+    command: ["/scripts/pull_models.sh"]
+    volumes:
+      - ./compose/opencode/opencode.json:/config/opencode.json:ro
+      - ./compose/pull_models.sh:/scripts/pull_models.sh:ro
     restart: "no"
