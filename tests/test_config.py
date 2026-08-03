@@ -4,6 +4,7 @@ import pytest
 
 from ingest_memory_rag.config import (
     DEFAULT_QDRANT_URL,
+    DEFAULT_WATCH_IGNORE,
     Settings,
     fastembed_vector_name,
     is_markdown,
@@ -22,12 +23,14 @@ def test_defaults(monkeypatch):
         "QDRANT_RECREATE_INDEX",
         "SCAN_ON_START",
         "WATCH_USE_POLLING",
+        "WATCH_IGNORE",
     ):
         monkeypatch.delenv(var, raising=False)
 
     settings = Settings.from_env()
 
     assert settings.watch_folder == Path("./raw")
+    assert settings.ignore_file == Path("./raw") / DEFAULT_WATCH_IGNORE
     assert settings.qdrant_url == DEFAULT_QDRANT_URL
     assert settings.embedding_dim == 384
     assert settings.patterns == ("*.txt", "*.md")
@@ -54,6 +57,33 @@ def test_env_overrides(monkeypatch):
     assert settings.recreate_index is True
     assert settings.scan_on_start is False
     assert settings.use_polling is True
+
+
+def test_ignore_file_defaults_inside_watch_folder(monkeypatch):
+    monkeypatch.setenv("WATCH_FOLDER", "/data/docs")
+    monkeypatch.delenv("WATCH_IGNORE", raising=False)
+
+    settings = Settings.from_env()
+
+    assert settings.ignore_file == Path("/data/docs") / DEFAULT_WATCH_IGNORE
+
+
+def test_ignore_file_relative_override_resolves_against_watch_folder(monkeypatch):
+    monkeypatch.setenv("WATCH_FOLDER", "/data/docs")
+    monkeypatch.setenv("WATCH_IGNORE", "skip.list")
+
+    settings = Settings.from_env()
+
+    assert settings.ignore_file == Path("/data/docs/skip.list")
+
+
+def test_ignore_file_absolute_override_is_used_verbatim(monkeypatch):
+    monkeypatch.setenv("WATCH_FOLDER", "/data/docs")
+    monkeypatch.setenv("WATCH_IGNORE", "/etc/ingest/global.ignore")
+
+    settings = Settings.from_env()
+
+    assert settings.ignore_file == Path("/etc/ingest/global.ignore")
 
 
 def test_valid_split_by_override(monkeypatch):

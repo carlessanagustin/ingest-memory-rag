@@ -443,6 +443,7 @@ dependencies = [
     { name = "haystack-ai" },
     { name = "markdown-it-py" },
     { name = "mdit-plain" },
+    { name = "pathspec" },
     { name = "qdrant-client" },
     { name = "watchdog" },
 ]
@@ -461,6 +462,7 @@ requires-dist = [
     { name = "haystack-ai", specifier = ">=2.6" },
     { name = "markdown-it-py", specifier = ">=3.0" },
     { name = "mdit-plain", specifier = ">=1.0" },
+    { name = "pathspec", specifier = ">=1.1.1" },
     { name = "qdrant-client", specifier = ">=1.12" },
     { name = "watchdog", specifier = ">=4.0" },
 ]

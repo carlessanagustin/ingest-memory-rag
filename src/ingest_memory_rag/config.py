@@ -14,6 +14,7 @@ from typing import Literal, cast, get_args
 SplitBy = Literal["function", "page", "passage", "period", "word", "line", "sentence"]
 
 DEFAULT_WATCH_FOLDER = "./raw"
+DEFAULT_WATCH_IGNORE = ".watchignore"
 DEFAULT_QDRANT_URL = "http://localhost:6333"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_EMBEDDING_DIM = 384  # matches all-MiniLM-L6-v2
@@ -71,6 +72,7 @@ class Settings:
     """Immutable, environment-driven configuration for the ingestion service."""
 
     watch_folder: Path
+    ignore_file: Path
     qdrant_url: str
     index: str
     embedding_model: str
@@ -86,8 +88,14 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
+        watch_folder = Path(_env_str("WATCH_FOLDER", DEFAULT_WATCH_FOLDER)).expanduser()
+        # A relative WATCH_IGNORE lives inside the watch folder (default .watchignore).
+        ignore_file = Path(_env_str("WATCH_IGNORE", DEFAULT_WATCH_IGNORE)).expanduser()
+        if not ignore_file.is_absolute():
+            ignore_file = watch_folder / ignore_file
         return cls(
-            watch_folder=Path(_env_str("WATCH_FOLDER", DEFAULT_WATCH_FOLDER)).expanduser(),
+            watch_folder=watch_folder,
+            ignore_file=ignore_file,
             qdrant_url=_env_str("QDRANT_URL", DEFAULT_QDRANT_URL),
             index=_env_str("QDRANT_INDEX", "Document"),
             embedding_model=_env_str("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),

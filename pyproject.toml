@@ -13,6 +13,7 @@ dependencies = [
     "watchdog>=4.0",
     "markdown-it-py>=3.0",
     "mdit-plain>=1.0",
+    "pathspec>=1.1.1",
 ]
 
 [project.scripts]

@@ -70,6 +70,23 @@ def test_only_matching_files_trigger_ingestion(tmp_path):
         observer.join()
 
 
+def test_nested_subfolder_file_is_ingested(tmp_path):
+    recorder = _Recorder()
+    observer, debouncer = _start(tmp_path, recorder)
+    try:
+        nested = tmp_path / "deep" / "nested"
+        nested.mkdir(parents=True)
+        time.sleep(0.2)  # let the recursive watch register the new subtree
+        (nested / "buried.md").write_text("# buried")
+
+        assert recorder.wait_for(1), f"nested file not ingested, got {recorder.names()}"
+        assert "buried.md" in recorder.names()
+    finally:
+        observer.stop()
+        debouncer.cancel_all()
+        observer.join()
+
+
 def test_update_retriggers_ingestion(tmp_path):
     recorder = _Recorder()
     observer, debouncer = _start(tmp_path, recorder)

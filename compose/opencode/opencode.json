@@ -20,5 +20,9 @@
       "url": "http://mcp-qdrant:8000/mcp",
       "enabled": true
     }
+  },
+  "permission": {
+    "webfetch": "deny",
+    "websearch": "deny"
   }
 }

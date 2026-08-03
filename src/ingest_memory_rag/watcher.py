@@ -13,6 +13,7 @@ import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+import pathspec
 from watchdog.events import (
     DirMovedEvent,
     FileMovedEvent,
@@ -29,6 +30,45 @@ logger = logging.getLogger(__name__)
 Action = Callable[[Path], None]
 
 
+def _build_spec(lines: list[str]) -> pathspec.PathSpec:
+    """Compile ignore ``lines`` with full gitignore semantics when available."""
+    spec_cls = getattr(pathspec, "GitIgnoreSpec", None)
+    if spec_cls is not None:
+        return spec_cls.from_lines(lines)
+    return pathspec.PathSpec.from_lines("gitwildmatch", lines)
+
+
+class IgnoreMatcher:
+    """Match paths against gitignore-style rules relative to the watch folder."""
+
+    def __init__(self, watch_folder: Path, spec: pathspec.PathSpec) -> None:
+        self._watch_folder = Path(watch_folder).resolve()
+        self._spec = spec
+
+    def is_ignored(self, path: str | Path) -> bool:
+        """True when ``path`` sits under the watch folder and matches a rule."""
+        if not self._spec:
+            return False
+        resolved = Path(path).resolve()
+        try:
+            rel = resolved.relative_to(self._watch_folder)
+        except ValueError:
+            return False  # outside the watch folder — never our concern
+        return self._spec.match_file(rel.as_posix())
+
+
+def build_ignore_matcher(settings: Settings) -> IgnoreMatcher:
+    """Build an :class:`IgnoreMatcher` from ``settings.ignore_file`` if it exists.
+
+    The file is read once; an absent file yields an empty spec (nothing ignored).
+    """
+    if settings.ignore_file.is_file():
+        lines = settings.ignore_file.read_text(encoding="utf-8").splitlines()
+    else:
+        lines = []
+    return IgnoreMatcher(settings.watch_folder, _build_spec(lines))
+
+
 def should_ingest(path: str | Path, patterns: tuple[str, ...]) -> bool:
     """True when ``path`` is a file whose name matches one of ``patterns``."""
     candidate = Path(path)
@@ -37,20 +77,34 @@ def should_ingest(path: str | Path, patterns: tuple[str, ...]) -> bool:
     return any(fnmatch.fnmatch(candidate.name, pattern) for pattern in patterns)
 
 
-def iter_matching_files(folder: Path, patterns: tuple[str, ...]) -> Iterator[Path]:
-    """Yield existing files under ``folder`` matching any of ``patterns``."""
+def iter_matching_files(
+    folder: Path,
+    patterns: tuple[str, ...],
+    matcher: IgnoreMatcher | None = None,
+) -> Iterator[Path]:
+    """Yield existing files under ``folder`` matching ``patterns`` and not ignored."""
     seen: set[Path] = set()
     for pattern in patterns:
         for path in folder.rglob(pattern):
             if path.is_file() and path not in seen:
                 seen.add(path)
+                if matcher is not None and matcher.is_ignored(path):
+                    continue
                 yield path
 
 
-def initial_scan(folder: Path, patterns: tuple[str, ...], action: Action) -> int:
-    """Run ``action`` against every existing matching file. Returns the count."""
+def initial_scan(
+    folder: Path,
+    patterns: tuple[str, ...],
+    action: Action,
+    matcher: IgnoreMatcher | None = None,
+) -> int:
+    """Run ``action`` against every existing matching, non-ignored file.
+
+    Returns the count.
+    """
     count = 0
-    for path in iter_matching_files(folder, patterns):
+    for path in iter_matching_files(folder, patterns, matcher):
         action(path)
         count += 1
     return count
@@ -94,9 +148,15 @@ class Debouncer:
 class IngestEventHandler(PatternMatchingEventHandler):
     """Routes matching create/modify/move events to the debouncer."""
 
-    def __init__(self, patterns: tuple[str, ...], debouncer: Debouncer) -> None:
+    def __init__(
+        self,
+        patterns: tuple[str, ...],
+        debouncer: Debouncer,
+        matcher: IgnoreMatcher | None = None,
+    ) -> None:
         super().__init__(patterns=list(patterns), ignore_directories=True, case_sensitive=False)
         self._debouncer = debouncer
+        self._matcher = matcher
 
     def on_created(self, event: FileSystemEvent) -> None:
         self._schedule(event.src_path)
@@ -110,7 +170,11 @@ class IngestEventHandler(PatternMatchingEventHandler):
 
     def _schedule(self, raw_path: str | bytes) -> None:
         path = raw_path.decode() if isinstance(raw_path, bytes) else raw_path
-        self._debouncer.trigger(Path(path))
+        candidate = Path(path)
+        if self._matcher is not None and self._matcher.is_ignored(candidate):
+            logger.debug("Ignoring %s (matched an ignore rule)", candidate)
+            return
+        self._debouncer.trigger(candidate)
 
 
 def _build_default_action(settings: Settings) -> Action:  # pragma: no cover
@@ -155,12 +219,15 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
             )
             raise SystemExit(1) from exc
 
+    # Loaded once at startup; editing the ignore file takes effect on restart.
+    matcher = build_ignore_matcher(settings)
+
     if settings.scan_on_start:
         logger.info("Scanning existing files under %s", folder)
-        initial_scan(folder, settings.patterns, action)
+        initial_scan(folder, settings.patterns, action, matcher)
 
     debouncer = Debouncer(settings.debounce_seconds, action)
-    handler = IngestEventHandler(settings.patterns, debouncer)
+    handler = IngestEventHandler(settings.patterns, debouncer, matcher)
     # Native FS events (inotify/FSEvents) are not delivered across bind mounts
     # on Docker Desktop; polling reliably picks up changes there.
     observer = PollingObserver() if settings.use_polling else Observer()

@@ -130,7 +130,8 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `WATCH_FOLDER` | `./raw` | Folder to watch (created if missing) |
+| `WATCH_FOLDER` | `./raw` | Folder to watch **recursively** — subfolders included (created if missing) |
+| `WATCH_IGNORE` | `.watchignore` | Gitignore-style ignore file (relative to `WATCH_FOLDER`) listing paths to skip |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
 | `QDRANT_INDEX` | `Document` | Collection name |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformers model |
@@ -140,6 +141,21 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 | `SCAN_ON_START` | `true` | Ingest existing matching files on startup |
 | `QDRANT_RECREATE_INDEX` | `false` | Drop and recreate the collection at startup |
 | `WATCH_USE_POLLING` | `false` | Poll instead of native FS events (needed for bind mounts on Docker Desktop) |
+
+`.txt`/`.md` files are ingested **recursively** from `WATCH_FOLDER` and its
+subfolders. To exclude files, add a **`.watchignore`** at the `WATCH_FOLDER`
+root (change the name/path with `WATCH_IGNORE`). It uses the same syntax as
+`.gitignore` — globs, `**`, `!` negation, `/`-anchoring, trailing-`/` for
+directories, and `#` comments — matched relative to `WATCH_FOLDER`:
+
+```gitignore
+drafts/            # skip everything under <WATCH_FOLDER>/drafts
+**/scratch.md      # skip scratch.md at any depth
+private-*.txt      # skip private-*.txt files
+!private-keep.txt  # …but re-include this one
+```
+
+The ignore file is read once at startup, so edits take effect on the next run.
 
 ## Development
 

@@ -1,16 +1,33 @@
 import threading
 from pathlib import Path
 
+import pathspec
 from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
 
-from ingest_memory_rag.config import PATTERNS
+from ingest_memory_rag.config import PATTERNS, Settings
 from ingest_memory_rag.watcher import (
     Debouncer,
+    IgnoreMatcher,
     IngestEventHandler,
+    _build_spec,
+    build_ignore_matcher,
     initial_scan,
     iter_matching_files,
     should_ingest,
 )
+
+
+def _matcher(watch_folder: Path, lines: list[str]) -> IgnoreMatcher:
+    return IgnoreMatcher(watch_folder, pathspec.GitIgnoreSpec.from_lines(lines))
+
+
+def _settings(monkeypatch, tmp_path: Path, ignore: str | None = None) -> Settings:
+    monkeypatch.setenv("WATCH_FOLDER", str(tmp_path))
+    if ignore is None:
+        monkeypatch.delenv("WATCH_IGNORE", raising=False)
+    else:
+        monkeypatch.setenv("WATCH_IGNORE", ignore)
+    return Settings.from_env()
 
 
 def test_should_ingest_matches_txt_and_md(tmp_path):
@@ -141,3 +158,111 @@ def test_initial_scan_invokes_action_per_matching_file(tmp_path):
 
     assert count == 2
     assert {p.name for p in seen} == {"one.txt", "two.md"}
+
+
+# --- Recursive ingestion regression (TASK-59) -------------------------------
+
+
+def test_initial_scan_discovers_deeply_nested_file(tmp_path):
+    nested = tmp_path / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+    (nested / "deep.md").write_text("x")
+    (tmp_path / "top.txt").write_text("x")
+    seen: list[Path] = []
+
+    count = initial_scan(tmp_path, PATTERNS, seen.append)
+
+    assert count == 2
+    assert {p.name for p in seen} == {"deep.md", "top.txt"}
+    assert any(p.parent == nested for p in seen), "nested file was not discovered"
+
+
+# --- .watchignore matcher (TASK-61) ----------------------------------------
+
+
+def test_ignore_matcher_applies_gitignore_rules(tmp_path):
+    matcher = _matcher(
+        tmp_path,
+        [
+            "# a comment line — ignored by the parser",
+            "notes-private.md",
+            "drafts/",
+            "**/scratch.txt",
+            "report-*.md",
+            "!report-keep.md",  # negation re-includes a file the glob would ignore
+        ],
+    )
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+    assert matcher.is_ignored(tmp_path / "drafts" / "wip.md") is True
+    assert matcher.is_ignored(tmp_path / "sub" / "scratch.txt") is True
+    assert matcher.is_ignored(tmp_path / "report-secret.md") is True
+    assert matcher.is_ignored(tmp_path / "report-keep.md") is False
+    assert matcher.is_ignored(tmp_path / "keep.md") is False
+    assert matcher.is_ignored(tmp_path / "notes-public.md") is False
+
+
+def test_ignore_matcher_ignores_paths_outside_watch_folder(tmp_path):
+    matcher = _matcher(tmp_path, ["*.md"])
+    outside = tmp_path.parent / "elsewhere" / "notes.md"
+
+    assert matcher.is_ignored(outside) is False
+
+
+def test_ignore_matcher_empty_spec_ignores_nothing(tmp_path):
+    matcher = _matcher(tmp_path, [])
+
+    assert matcher.is_ignored(tmp_path / "anything.md") is False
+
+
+def test_build_ignore_matcher_reads_ignore_file(monkeypatch, tmp_path):
+    (tmp_path / ".watchignore").write_text("notes-private.md\ndrafts/\n")
+    settings = _settings(monkeypatch, tmp_path)
+
+    matcher = build_ignore_matcher(settings)
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+    assert matcher.is_ignored(tmp_path / "drafts" / "wip.md") is True
+    assert matcher.is_ignored(tmp_path / "keep.md") is False
+
+
+def test_build_ignore_matcher_absent_file_ignores_nothing(monkeypatch, tmp_path):
+    settings = _settings(monkeypatch, tmp_path)  # no .watchignore on disk
+
+    matcher = build_ignore_matcher(settings)
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is False
+
+
+def test_build_spec_falls_back_without_gitignorespec(monkeypatch, tmp_path):
+    monkeypatch.delattr(pathspec, "GitIgnoreSpec", raising=False)
+
+    spec = _build_spec(["notes-private.md"])
+    matcher = IgnoreMatcher(tmp_path, spec)
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+    assert matcher.is_ignored(tmp_path / "keep.md") is False
+
+
+def test_iter_matching_files_skips_ignored(tmp_path):
+    (tmp_path / "keep.md").write_text("x")
+    (tmp_path / "notes-private.md").write_text("x")
+    drafts = tmp_path / "drafts"
+    drafts.mkdir()
+    (drafts / "wip.md").write_text("x")
+    matcher = _matcher(tmp_path, ["notes-private.md", "drafts/"])
+
+    found = {p.name for p in iter_matching_files(tmp_path, PATTERNS, matcher)}
+
+    assert found == {"keep.md"}
+
+
+def test_handler_does_not_schedule_ignored_path(tmp_path):
+    recorder = _RecordingDebouncer()
+    matcher = _matcher(tmp_path, ["notes-private.md"])
+    handler = IngestEventHandler(PATTERNS, recorder, matcher)  # type: ignore[arg-type]
+
+    handler.on_created(FileCreatedEvent(str(tmp_path / "notes-private.md")))
+    handler.on_created(FileCreatedEvent(str(tmp_path / "keep.md")))
+
+    assert recorder.triggered == [tmp_path / "keep.md"]
