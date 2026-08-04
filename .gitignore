@@ -20,6 +20,9 @@ dist/
 .eggs/
 wheels/
 
+# Generated static Kanban board site (build/build_board_site.sh output)
+_site/
+
 # Virtual environments (recreate from the lockfile, never commit)
 .venv/
 venv/

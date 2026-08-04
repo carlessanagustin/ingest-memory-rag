@@ -185,6 +185,26 @@ uv run mypy             # type-check
 uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% coverage
 ```
 
+### Project board (GitHub Pages)
+
+The Backlog.md tasks are published as a **static, read-only Kanban board** at
+**<https://carlessanagustin.github.io/ingest-memory-rag/>**. It is a snapshot of
+`backlog board export` rendered to a single self-contained HTML page — not the
+interactive `backlog browser` (that stays local; see below).
+
+- **Deploy:** the [`Deploy backlog board to Pages`](.github/workflows/pages.yml)
+  workflow rebuilds and publishes the board on every push to `main` that touches
+  `backlog/**` (or the build script / workflow), and can be triggered manually
+  from the Actions tab (`workflow_dispatch`).
+- **One-time setup:** in the repo, open **Settings → Pages → Build and deployment
+  → Source** and choose **GitHub Actions**. The workflow cannot flip this setting
+  itself, so the first deploy only serves once this is set.
+- **Preview locally:** `bash scripts/build_board_site.sh` writes the page to
+  `_site/index.html` (gitignored) — open it in a browser.
+
+For the full interactive board (drag/edit tasks) run `backlog browser` locally;
+it serves at <http://127.0.0.1:6420> and is not published.
+
 ## MCP (query the ingested data)
 
 Ingestion writes a Qdrant collection the official
