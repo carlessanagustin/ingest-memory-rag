@@ -16,9 +16,6 @@
         },
         "qwen3:8b": {
           "name": "qwen3:8b"
-        },
-        "deepseek-v4-flash:cloud": {
-          "name": "deepseek-v4-flash:cloud"
         }
       }
     }
@@ -30,7 +27,7 @@
       "url": "http://mcp-qdrant:8000/mcp"
     },
     "qdrant_local": {
-      "enabled": false,
+      "enabled": true,
       "type": "local",
       "command": [
         "uvx",
@@ -38,7 +35,8 @@
       ],
       "environment": {
         "QDRANT_URL": "{env:QDRANT_URL}",
-        "COLLECTION_NAME": "{env:QDRANT_INDEX}"
+        "COLLECTION_NAME": "{env:QDRANT_INDEX}",
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2"
       }
     }
   },
@@ -53,7 +51,7 @@
       "prompt": "You have exactly one source of truth: the qdrant_* tools. You must answer questions strictly based on the information available in the qdrant_* tools. If the answer is not found in the qdrant_* tools, respond with 'I don't know.' Do not provide any information that is not present in the qdrant_* tools.",
       "permission": {
         "qdrant_remote_*": "allow",
-        "qdrant_local_*": "deny",
+        "qdrant_local_*": "allow",
         "read": "deny",
         "edit": "deny",
         "glob": "deny",
