@@ -188,8 +188,10 @@ uv run pytest           # fast unit tests (no network / no Qdrant), ≥80% cover
 ### Project board (GitHub Pages)
 
 The Backlog.md tasks are published as a **static, read-only Kanban board** at
-**<https://carlessanagustin.github.io/ingest-memory-rag/>**. It is a snapshot of
-`backlog board export` rendered to a single self-contained HTML page — not the
+**<https://carlessanagustin.github.io/ingest-memory-rag/>**. It is a **responsive
+Tailwind card layout** generated from `backlog task list --json` by
+`scripts/build_board_site.sh` — a single **self-contained** HTML page (Tailwind is
+compiled at build time and inlined; no CDN or external resources). It is not the
 interactive `backlog browser` (that stays local; see below).
 
 - **Deploy:** the [`Deploy backlog board to Pages`](.github/workflows/pages.yml)
@@ -200,7 +202,9 @@ interactive `backlog browser` (that stays local; see below).
   → Source** and choose **GitHub Actions**. The workflow cannot flip this setting
   itself, so the first deploy only serves once this is set.
 - **Preview locally:** `bash scripts/build_board_site.sh` writes the page to
-  `_site/index.html` (gitignored) — open it in a browser.
+  `_site/index.html` (gitignored) — open it in a browser. Requires the `backlog`
+  CLI, `uv`, and **Node** (the script fetches a pinned Tailwind CLI to compile the
+  CSS); CI already has all three.
 
 For the full interactive board (drag/edit tasks) run `backlog browser` locally;
 it serves at <http://127.0.0.1:6420> and is not published.
