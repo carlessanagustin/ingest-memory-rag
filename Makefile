@@ -50,14 +50,14 @@ logs: ## Follow the app logs
 clean: ## Remove caches and build artifacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache .coverage htmlcov dist build
 
-reset: ## Wipe storage/ (qdrant, ollama, opencode data) (deletes the pulled model + ingested vectors + opencode state) and stop the stack; rebuild with `make up`
-	@echo "WARNING: this will delete storage/ (qdrant, ollama, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, and opencode state (auth/sessions)."; \
-	echo "These will be rebuilt from scratch on the next 'make up'."; \
+reset: ## Wipe storage/ EXCEPT the Ollama models (keeps storage/ollama to avoid re-downloading); deletes qdrant + opencode data and stops the stack; rebuild with `make up`
+	@echo "WARNING: this will delete storage/ (qdrant, opencode data), including all ingested Qdrant data and opencode state (auth/sessions)."; \
+	echo "The Ollama models in storage/ollama are PRESERVED (use 'make reset-hard' to also delete them). These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
 	if [ "$$reply" = "y" ] || [ "$$reply" = "Y" ]; then \
 		docker compose down --remove-orphans && \
-		rm -rf storage && \
 		mkdir -p storage && \
+		find storage -mindepth 1 -maxdepth 1 ! -name ollama ! -name .gitkeep -exec rm -rf {} + && \
 		touch storage/.gitkeep && \
 		echo "Reset complete."; \
 	else \
@@ -65,7 +65,7 @@ reset: ## Wipe storage/ (qdrant, ollama, opencode data) (deletes the pulled mode
 	fi
 
 reset-hard: ## Like reset, plus remove the built app image and prune dangling images/build cache for a from-scratch rebuild
-	@echo "WARNING: this will delete storage/ (qdrant, ollama, opencode data), including the ~17GB Ollama model, all ingested Qdrant data, and opencode state (auth/sessions),"; \
+	@echo "WARNING: unlike 'reset', this will delete storage/ (qdrant, ollama, opencode data) ENTIRELY, including the ~17GB Ollama model, all ingested Qdrant data, and opencode state (auth/sessions)."; \
 	echo "AND remove the locally-built app image and prune dangling images and build cache."; \
 	echo "These will be rebuilt from scratch on the next 'make up'."; \
 	read -p "Proceed? [y/N] " reply; \
