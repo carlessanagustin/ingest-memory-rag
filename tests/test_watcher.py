@@ -1,3 +1,4 @@
+import logging
 import threading
 from pathlib import Path
 
@@ -7,12 +8,14 @@ from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileMovedEvent
 from ingest_memory_rag.config import PATTERNS, Settings
 from ingest_memory_rag.watcher import (
     Debouncer,
+    IgnoreFileEventHandler,
     IgnoreMatcher,
     IngestEventHandler,
     _build_spec,
     build_ignore_matcher,
     initial_scan,
     iter_matching_files,
+    maybe_remove_ingested,
     should_ingest,
 )
 
@@ -244,6 +247,73 @@ def test_build_spec_falls_back_without_gitignorespec(monkeypatch, tmp_path):
     assert matcher.is_ignored(tmp_path / "keep.md") is False
 
 
+# --- Live-reloadable ignore file (TASK-76 / TASK-77) -----------------------
+
+
+def test_reload_picks_up_added_rule(monkeypatch, tmp_path):
+    ignore = tmp_path / ".watchignore"
+    ignore.write_text("")  # present but rule-less at build time
+    matcher = build_ignore_matcher(_settings(monkeypatch, tmp_path))
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is False
+
+    ignore.write_text("notes-private.md\n")
+    matcher.reload()
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+
+
+def test_reload_drops_removed_rule(monkeypatch, tmp_path):
+    ignore = tmp_path / ".watchignore"
+    ignore.write_text("notes-private.md\n")
+    matcher = build_ignore_matcher(_settings(monkeypatch, tmp_path))
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+
+    ignore.write_text("")  # rule removed
+    matcher.reload()
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is False
+
+
+def test_reload_absent_file_keeps_empty_spec(monkeypatch, tmp_path):
+    matcher = build_ignore_matcher(_settings(monkeypatch, tmp_path))  # no file on disk
+
+    matcher.reload()  # file still absent
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is False
+
+
+def test_reload_without_configured_file_is_noop(tmp_path):
+    matcher = _matcher(tmp_path, ["notes-private.md"])  # ignore_file defaults to None
+
+    matcher.reload()  # nothing to re-read; keeps the compiled spec
+
+    assert matcher.is_ignored(tmp_path / "notes-private.md") is True
+
+
+def test_ignore_file_handler_fires_only_for_the_ignore_file(tmp_path):
+    ignore = tmp_path / ".watchignore"
+    calls: list[None] = []
+    handler = IgnoreFileEventHandler(ignore, lambda: calls.append(None))
+
+    handler.on_created(FileCreatedEvent(str(ignore)))
+    handler.on_modified(FileModifiedEvent(str(ignore)))
+    handler.on_moved(FileMovedEvent(str(tmp_path / ".tmp-abc"), str(ignore)))
+
+    assert len(calls) == 3
+
+
+def test_ignore_file_handler_ignores_other_paths(tmp_path):
+    ignore = tmp_path / ".watchignore"
+    calls: list[None] = []
+    handler = IgnoreFileEventHandler(ignore, lambda: calls.append(None))
+
+    handler.on_created(FileCreatedEvent(str(tmp_path / "notes.md")))
+    handler.on_modified(FileModifiedEvent(str(tmp_path / "other.txt")))
+    handler.on_moved(FileMovedEvent(str(tmp_path / "a"), str(tmp_path / "b")))
+
+    assert calls == []
+
+
 def test_iter_matching_files_skips_ignored(tmp_path):
     (tmp_path / "keep.md").write_text("x")
     (tmp_path / "notes-private.md").write_text("x")
@@ -266,3 +336,48 @@ def test_handler_does_not_schedule_ignored_path(tmp_path):
     handler.on_created(FileCreatedEvent(str(tmp_path / "keep.md")))
 
     assert recorder.triggered == [tmp_path / "keep.md"]
+
+
+# --- WATCH_REMOVE (delete source after successful ingest) -------------------
+
+
+def test_maybe_remove_ingested_deletes_after_chunks(tmp_path, caplog):
+    target = tmp_path / "done.txt"
+    target.write_text("x")
+
+    with caplog.at_level(logging.INFO, logger="ingest_memory_rag.watcher"):
+        maybe_remove_ingested(target, 3, enabled=True)
+
+    assert not target.exists()
+    assert any(r.levelno == logging.INFO and "Deleted" in r.getMessage() for r in caplog.records)
+
+
+def test_maybe_remove_ingested_keeps_file_on_zero_chunks(tmp_path, caplog):
+    target = tmp_path / "empty.txt"
+    target.write_text("x")
+
+    with caplog.at_level(logging.WARNING, logger="ingest_memory_rag.watcher"):
+        maybe_remove_ingested(target, 0, enabled=True)
+
+    assert target.exists()
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_maybe_remove_ingested_disabled_keeps_file(tmp_path):
+    target = tmp_path / "keep.txt"
+    target.write_text("x")
+
+    maybe_remove_ingested(target, 5, enabled=False)
+
+    assert target.exists()
+
+
+def test_maybe_remove_ingested_swallows_delete_error(tmp_path, caplog):
+    missing = tmp_path / "gone.txt"  # never created → unlink raises FileNotFoundError
+
+    with caplog.at_level(logging.ERROR, logger="ingest_memory_rag.watcher"):
+        maybe_remove_ingested(missing, 1, enabled=True)  # must not raise
+
+    assert any(
+        r.levelno == logging.ERROR and "Failed to delete" in r.getMessage() for r in caplog.records
+    )

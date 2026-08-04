@@ -85,6 +85,7 @@ class Settings:
     recreate_index: bool
     scan_on_start: bool
     use_polling: bool
+    watch_remove: bool
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -108,4 +109,5 @@ class Settings:
             recreate_index=_env_bool("QDRANT_RECREATE_INDEX", default=False),
             scan_on_start=_env_bool("SCAN_ON_START", default=True),
             use_polling=_env_bool("WATCH_USE_POLLING", default=False),
+            watch_remove=_env_bool("WATCH_REMOVE", default=False),
         )

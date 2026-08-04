@@ -16,6 +16,9 @@
         },
         "qwen3:8b": {
           "name": "qwen3:8b"
+        },
+        "deepseek-v4-flash:cloud": {
+          "name": "deepseek-v4-flash:cloud"
         }
       }
     }
@@ -46,6 +49,7 @@
       "mode": "primary",
       "temperature": 0,
       "steps": 6,
+      "model": "deepseek-v4-flash:cloud",
       "prompt": "You have exactly one source of truth: the qdrant_* tools. You must answer questions strictly based on the information available in the qdrant_* tools. If the answer is not found in the qdrant_* tools, respond with 'I don't know.' Do not provide any information that is not present in the qdrant_* tools.",
       "permission": {
         "qdrant_remote_*": "allow",

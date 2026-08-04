@@ -131,7 +131,7 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 | Variable | Default | Description |
 | --- | --- | --- |
 | `WATCH_FOLDER` | `./raw` | Folder to watch **recursively** — subfolders included (created if missing) |
-| `WATCH_IGNORE` | `.watchignore` | Gitignore-style ignore file (relative to `WATCH_FOLDER`) listing paths to skip |
+| `WATCH_IGNORE` | `.watchignore` | Gitignore-style ignore file (relative to `WATCH_FOLDER`) listing paths to skip — reloaded **live** when edited |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant endpoint |
 | `QDRANT_INDEX` | `Document` | Collection name |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Sentence-Transformers model |
@@ -141,6 +141,7 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 | `SCAN_ON_START` | `true` | Ingest existing matching files on startup |
 | `QDRANT_RECREATE_INDEX` | `false` | Drop and recreate the collection at startup |
 | `WATCH_USE_POLLING` | `false` | Poll instead of native FS events (needed for bind mounts on Docker Desktop) |
+| `WATCH_REMOVE` | `false` | **Destructive**, opt-in: delete a source file after it is successfully ingested |
 
 `.txt`/`.md` files are ingested **recursively** from `WATCH_FOLDER` and its
 subfolders. To exclude files, add a **`.watchignore`** at the `WATCH_FOLDER`
@@ -155,7 +156,24 @@ private-*.txt      # skip private-*.txt files
 !private-keep.txt  # …but re-include this one
 ```
 
-The ignore file is read once at startup, so edits take effect on the next run.
+The ignore file is **watched and reloaded live** — edit it and the new rules
+take effect within a debounce window (`DEBOUNCE_SECONDS`), **no restart needed**.
+In the Docker stack it is bind-mounted **read-only** into the `app` container at
+**`/app/raw/.watchignore`** (`WATCH_FOLDER=/app/raw`, `WATCH_IGNORE=.watchignore`);
+edit the `.watchignore` at the **host repo root** and the container picks it up.
+
+> **Docker Desktop single-file bind-mount caveat:** edit the file **in place**
+> (append/overwrite). Editors that save via atomic write-then-rename swap the
+> file's inode, which may not propagate through a *single-file* bind mount; if a
+> live edit doesn't take effect, run `docker compose restart app` as a fallback.
+
+**`WATCH_REMOVE`** (default `false`) is an **opt-in, destructive** switch that
+deletes each source file *after* it has been successfully ingested. A file is
+removed only when at least one chunk was written; if ingestion stores nothing
+(0 chunks) or fails, the file is **kept** and the reason is logged. This applies
+to both the startup scan and live events. A failed delete is logged and does not
+crash the watcher. Leave it off unless you deliberately want ingested files
+consumed from `WATCH_FOLDER`.
 
 ## Development
 

@@ -18,6 +18,7 @@ from watchdog.events import (
     DirMovedEvent,
     FileMovedEvent,
     FileSystemEvent,
+    FileSystemEventHandler,
     PatternMatchingEventHandler,
 )
 from watchdog.observers import Observer
@@ -39,34 +40,69 @@ def _build_spec(lines: list[str]) -> pathspec.PathSpec:
 
 
 class IgnoreMatcher:
-    """Match paths against gitignore-style rules relative to the watch folder."""
+    """Match paths against gitignore-style rules relative to the watch folder.
 
-    def __init__(self, watch_folder: Path, spec: pathspec.PathSpec) -> None:
+    The compiled spec can be rebuilt from disk at runtime via :meth:`reload`. A
+    lock guards the spec because it is read on the observer thread while being
+    swapped from an event-callback thread.
+    """
+
+    def __init__(
+        self,
+        watch_folder: Path,
+        spec: pathspec.PathSpec,
+        ignore_file: Path | None = None,
+    ) -> None:
         self._watch_folder = Path(watch_folder).resolve()
         self._spec = spec
+        self._ignore_file = ignore_file
+        self._lock = threading.Lock()
+
+    def reload(self) -> None:
+        """Re-read the ignore file and swap in a freshly compiled spec.
+
+        A no-op when no ignore file was configured; an absent file yields an
+        empty spec (nothing ignored).
+        """
+        if self._ignore_file is None:
+            return
+        if self._ignore_file.is_file():
+            lines = self._ignore_file.read_text(encoding="utf-8").splitlines()
+        else:
+            lines = []
+        spec = _build_spec(lines)
+        with self._lock:
+            self._spec = spec
 
     def is_ignored(self, path: str | Path) -> bool:
         """True when ``path`` sits under the watch folder and matches a rule."""
-        if not self._spec:
+        with self._lock:
+            spec = self._spec
+        if not spec:
             return False
         resolved = Path(path).resolve()
         try:
             rel = resolved.relative_to(self._watch_folder)
         except ValueError:
             return False  # outside the watch folder — never our concern
-        return self._spec.match_file(rel.as_posix())
+        return spec.match_file(rel.as_posix())
 
 
 def build_ignore_matcher(settings: Settings) -> IgnoreMatcher:
     """Build an :class:`IgnoreMatcher` from ``settings.ignore_file`` if it exists.
 
-    The file is read once; an absent file yields an empty spec (nothing ignored).
+    An absent file yields an empty spec (nothing ignored). The file path is kept
+    so :meth:`IgnoreMatcher.reload` can re-read it after it changes on disk.
     """
     if settings.ignore_file.is_file():
         lines = settings.ignore_file.read_text(encoding="utf-8").splitlines()
     else:
         lines = []
-    return IgnoreMatcher(settings.watch_folder, _build_spec(lines))
+    return IgnoreMatcher(
+        settings.watch_folder,
+        _build_spec(lines),
+        ignore_file=settings.ignore_file,
+    )
 
 
 def should_ingest(path: str | Path, patterns: tuple[str, ...]) -> bool:
@@ -177,6 +213,53 @@ class IngestEventHandler(PatternMatchingEventHandler):
         self._debouncer.trigger(candidate)
 
 
+class IgnoreFileEventHandler(FileSystemEventHandler):
+    """Calls ``on_change`` when the ignore file itself is created/modified/moved.
+
+    A :class:`PatternMatchingEventHandler` matching ``*.txt``/``*.md`` never sees
+    the ignore file, so it gets a dedicated handler that fires only for that one
+    path — letting the watcher reload its rules without a restart.
+    """
+
+    def __init__(self, ignore_file: Path, on_change: Callable[[], None]) -> None:
+        self._ignore_file = Path(ignore_file).resolve()
+        self._on_change = on_change
+
+    def on_created(self, event: FileSystemEvent) -> None:
+        self._maybe_fire(event.src_path)
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        self._maybe_fire(event.src_path)
+
+    def on_moved(self, event: DirMovedEvent | FileMovedEvent) -> None:
+        # Atomic saves (write temp file, then rename into place) surface here.
+        self._maybe_fire(event.dest_path)
+
+    def _maybe_fire(self, raw_path: str | bytes) -> None:
+        path = raw_path.decode() if isinstance(raw_path, bytes) else raw_path
+        if Path(path).resolve() == self._ignore_file:
+            self._on_change()
+
+
+def maybe_remove_ingested(path: Path, written: int, *, enabled: bool) -> None:
+    """Delete ``path`` after a successful ingest when ``WATCH_REMOVE`` is on.
+
+    Only removes when ``written >= 1``; a file that stored nothing is kept and a
+    warning logged. A failed unlink is logged and swallowed so the watcher
+    survives permission/missing-file errors.
+    """
+    if not enabled:
+        return
+    if written < 1:
+        logger.warning("Kept %s: nothing was stored (0 chunk(s))", path)
+        return
+    try:
+        path.unlink()
+        logger.info("Deleted %s after ingesting %d chunk(s)", path, written)
+    except OSError:
+        logger.exception("Failed to delete %s", path)
+
+
 def _build_default_action(settings: Settings) -> Action:  # pragma: no cover
     """Create the real ingestion callback.
 
@@ -193,10 +276,17 @@ def _build_default_action(settings: Settings) -> Action:  # pragma: no cover
         try:
             written = engine.ingest_file(path)
             logger.info("Ingested %s → %d chunk(s)", path, written)
+            maybe_remove_ingested(path, written, enabled=settings.watch_remove)
         except Exception:  # noqa: BLE001 - keep the watcher alive on any file error
             logger.exception("Failed to ingest %s", path)
 
     return action
+
+
+def _reload_ignore(matcher: IgnoreMatcher, settings: Settings) -> None:  # pragma: no cover
+    """Re-read the ignore file into ``matcher`` and log it."""
+    matcher.reload()
+    logger.info("Reloaded ignore rules from %s", settings.ignore_file)
 
 
 def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no cover
@@ -219,7 +309,7 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
             )
             raise SystemExit(1) from exc
 
-    # Loaded once at startup; editing the ignore file takes effect on restart.
+    # Shared between the ingest handler and the live reload below.
     matcher = build_ignore_matcher(settings)
 
     if settings.scan_on_start:
@@ -228,10 +318,25 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
 
     debouncer = Debouncer(settings.debounce_seconds, action)
     handler = IngestEventHandler(settings.patterns, debouncer, matcher)
+
+    # Reload the ignore rules live when the file changes, debounced like ingests.
+    reload_debouncer = Debouncer(
+        settings.debounce_seconds, lambda _p: _reload_ignore(matcher, settings)
+    )
+    ignore_handler = IgnoreFileEventHandler(
+        settings.ignore_file, lambda: reload_debouncer.trigger(settings.ignore_file)
+    )
+
     # Native FS events (inotify/FSEvents) are not delivered across bind mounts
     # on Docker Desktop; polling reliably picks up changes there.
     observer = PollingObserver() if settings.use_polling else Observer()
-    observer.schedule(handler, str(folder), recursive=True)
+    main_watch = observer.schedule(handler, str(folder), recursive=True)
+    # The ignore file usually lives inside the watch folder — reuse that watch;
+    # a custom WATCH_IGNORE elsewhere needs its own (non-recursive) one.
+    if settings.ignore_file.parent.resolve() == folder.resolve():
+        observer.add_handler_for_watch(ignore_handler, main_watch)
+    else:
+        observer.schedule(ignore_handler, str(settings.ignore_file.parent), recursive=False)
     observer.start()
     logger.info("Watching %s for %s (Ctrl+C to stop)", folder, list(settings.patterns))
     try:
@@ -242,4 +347,5 @@ def run(settings: Settings, action: Action | None = None) -> None:  # pragma: no
     finally:
         observer.stop()
         debouncer.cancel_all()
+        reload_debouncer.cancel_all()
         observer.join()

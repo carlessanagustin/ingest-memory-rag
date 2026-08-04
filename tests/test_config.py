@@ -97,6 +97,22 @@ def test_invalid_split_by_raises(monkeypatch):
         Settings.from_env()
 
 
+def test_watch_remove_defaults_false(monkeypatch):
+    monkeypatch.delenv("WATCH_REMOVE", raising=False)
+    assert Settings.from_env().watch_remove is False
+
+
+def test_watch_remove_empty_is_false(monkeypatch):
+    monkeypatch.setenv("WATCH_REMOVE", "")
+    assert Settings.from_env().watch_remove is False
+
+
+@pytest.mark.parametrize("value", ["true", "YES", "On", "1"])
+def test_watch_remove_truthy_variants(monkeypatch, value):
+    monkeypatch.setenv("WATCH_REMOVE", value)
+    assert Settings.from_env().watch_remove is True
+
+
 def test_is_markdown():
     assert is_markdown("notes.md") is True
     assert is_markdown("README.MARKDOWN") is True
