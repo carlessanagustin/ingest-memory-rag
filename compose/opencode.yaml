@@ -7,8 +7,6 @@ services:
     command: ["opencode", "web", "--hostname", "0.0.0.0", "--port", "4096"]
     restart: unless-stopped
     depends_on:
-      ollama:
-        condition: service_healthy
       mcp-qdrant:
         condition: service_healthy
     ports:
@@ -30,10 +28,10 @@ services:
       retries: 18
       start_period: 60s
     deploy:
-      resources: # tunable
+      resources: # sized per environment — see environments/*.env (DEPLOY_ENV)
         limits:
-          cpus: "2"
-          memory: 2G
+          cpus: "${OPENCODE_CPU_LIMIT:-2}"
+          memory: ${OPENCODE_MEM_LIMIT:-2G}
         reservations:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "${OPENCODE_CPU_RES:-0.5}"
+          memory: ${OPENCODE_MEM_RES:-512M}

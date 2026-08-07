@@ -3,9 +3,9 @@ include:
     project_directory: .
   - path: compose/app.yaml
     project_directory: .
-  - path: compose/ollama.yaml
-    project_directory: .
-  - path: compose/lobechat.yaml
-    project_directory: .
+  #- path: compose/ollama.yaml
+  #  project_directory: .
   - path: compose/opencode.yaml
     project_directory: .
+  #- path: compose/lobechat.yaml
+  #  project_directory: .

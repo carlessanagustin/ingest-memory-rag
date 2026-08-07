@@ -16,13 +16,13 @@ services:
       retries: 12
       start_period: 3s
     deploy:
-      resources: # tunable
+      resources: # sized per environment — see environments/*.env (DEPLOY_ENV)
         limits:
-          cpus: "2"
-          memory: 2G
+          cpus: "${QDRANT_CPU_LIMIT:-2}"
+          memory: ${QDRANT_MEM_LIMIT:-2G}
         reservations:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "${QDRANT_CPU_RES:-0.5}"
+          memory: ${QDRANT_MEM_RES:-512M}
 
   mcp-qdrant:
     # Bridge that lets MCP clients (e.g. LobeChat) semantically search the
@@ -54,10 +54,10 @@ services:
       start_period: 120s
     restart: unless-stopped
     deploy:
-      resources: # tunable; runs fastembed for queries
+      resources: # sized per environment — see environments/*.env (DEPLOY_ENV)
         limits:
-          cpus: "2"
-          memory: 1.5G
+          cpus: "${MCP_QDRANT_CPU_LIMIT:-2}"
+          memory: ${MCP_QDRANT_MEM_LIMIT:-1.5G}
         reservations:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "${MCP_QDRANT_CPU_RES:-0.5}"
+          memory: ${MCP_QDRANT_MEM_RES:-512M}

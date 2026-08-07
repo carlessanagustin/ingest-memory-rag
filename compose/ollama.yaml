@@ -15,21 +15,20 @@ services:
       start_period: 30s
     restart: unless-stopped
     deploy:
-      resources: # tunable; size to the largest model you pull - the Docker Desktop VM must actually be allocated this much RAM
+      resources: # sized per environment — see environments/*.env (DEPLOY_ENV)
         limits:
-          cpus: "6" # capped from 8: Docker Desktop VM only has 6 CPUs allocated
-          memory: 24G
+          cpus: "${OLLAMA_CPU_LIMIT:-6}"
+          memory: ${OLLAMA_MEM_LIMIT:-24G}
         reservations:
-          cpus: "1"
-          memory: 2G
-    # Docker Desktop (macOS/Windows) has no GPU passthrough, so this runs
-    # CPU-only. On a Linux host with an NVIDIA GPU + nvidia-container-toolkit,
-    # uncomment the block below to enable GPU acceleration:
-    #   reservations:
-    #     devices:
-    #       - driver: nvidia
-    #         count: all
-    #         capabilities: [gpu]
+          cpus: "${OLLAMA_CPU_RES:-1}"
+          memory: ${OLLAMA_MEM_RES:-2G}
+          # Docker Desktop (macOS/Windows) has no GPU passthrough, so this runs
+          # CPU-only. On a Linux host with an NVIDIA GPU + nvidia-container-toolkit,
+          # add a devices reservation here to enable GPU acceleration:
+          #   devices:
+          #     - driver: nvidia
+          #       count: all
+          #       capabilities: [gpu]
 
   ollama-pull:
     # One-shot puller: pulls every model listed under provider.ollama.models

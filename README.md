@@ -150,10 +150,49 @@ make down        # stop everything
 | `lobe-chat` | `lobehub/lobe-chat:1.143.3` | 3210 | Chat UI; RAG via `mcp-qdrant`, models via Ollama/OpenAI/Anthropic |
 | `opencode` | built from `compose/opencode/` (`ubuntu:26.04` + opencode) | 4096 | Web coding agent; uses the local Ollama provider and the `mcp-qdrant` bridge |
 
-Every long-running service (`qdrant`, `app`, `mcp-qdrant`, `ollama`, `lobe-chat`,
-`opencode`) has a healthcheck and CPU/memory resource limits — see
-`docker-compose.yml` and the `compose/*.yaml` includes. `ollama-pull` is a
-one-shot job with no healthcheck.
+Every long-running service has a healthcheck. CPU/memory limits for the core
+services (`qdrant`, `app`, `mcp-qdrant`, `ollama`, `opencode`) are tunable **per
+environment** — see [Per-environment resource sizing](#per-environment-resource-sizing)
+below. `ollama-pull` is a one-shot job with no healthcheck.
+
+### Per-environment resource sizing
+
+Different VPS hosts can run different resource profiles. Each service's
+`deploy.resources` is defined **inline** in its `compose/*.yaml` file with
+interpolated values and a built-in default, e.g. for `ollama`:
+
+```yaml
+limits:
+  cpus: "${OLLAMA_CPU_LIMIT:-6}"
+  memory: ${OLLAMA_MEM_LIMIT:-24G}
+```
+
+A **tier** is just a set of those values, held in a dotenv file under
+[`environments/`](environments/) — `small.env`, `medium.env`, `large.env` — and
+**`DEPLOY_ENV`** in `.env` picks which one the `make` targets load:
+
+```dotenv
+# .env
+DEPLOY_ENV=small        # small | medium | large   (default: medium)
+```
+
+`make up` / `down` / `build` / `logs` run
+`docker compose --env-file environments/$DEPLOY_ENV.env --env-file .env …`, so the
+tier's numbers override the inline defaults, and `.env` (loaded last) can still
+override any single value. Because the limits live *with* each service (not in a
+separate file), commenting a service out of the `include:` list in
+`docker-compose.yml` removes that service **and** its limits together — no
+orphaned-service errors. `medium` matches the built-in defaults, so a bare
+`docker compose up` (no `make`, no tier file) still gets sensible limits.
+
+- **Tune a tier:** edit the numbers in `environments/<tier>.env`.
+- **Add a tier** (e.g. `xlarge`): copy an existing file to
+  `environments/xlarge.env`, adjust it, and set `DEPLOY_ENV=xlarge`.
+- **Override one service ad hoc:** set its var in `.env`, e.g.
+  `OLLAMA_MEM_LIMIT=32G`.
+- **Check the effective values:**
+  `docker compose --env-file environments/large.env --env-file .env config`
+  (or `make up DEPLOY_ENV=large`).
 
 ### Run locally (development)
 

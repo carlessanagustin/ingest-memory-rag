@@ -30,10 +30,10 @@ services:
       start_period: 30s
     restart: unless-stopped
     deploy:
-      resources: # tunable; runs fastembed on the startup scan
+      resources: # sized per environment — see environments/*.env (DEPLOY_ENV)
         limits:
-          cpus: "2"
-          memory: 1.5G
+          cpus: "${APP_CPU_LIMIT:-2}"
+          memory: ${APP_MEM_LIMIT:-1.5G}
         reservations:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "${APP_CPU_RES:-0.5}"
+          memory: ${APP_MEM_RES:-512M}
