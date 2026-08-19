@@ -5,7 +5,7 @@ description = "Watch a folder and ingest .txt/.md files into a Qdrant vector DB 
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.14"
 dependencies = [
     "haystack-ai>=2.6",
     "qdrant-client>=1.12",
@@ -36,16 +36,15 @@ packages = ["src/ingest_memory_rag"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py314"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-# 3.12 so mypy can parse dependency stubs (e.g. numpy) that use `type` aliases;
-# runtime support still includes 3.11 (see requires-python and the CI matrix).
-python_version = "3.12"
+# Matches requires-python (3.14).
+python_version = "3.14"
 files = ["src"]
 mypy_path = "src"
 disallow_untyped_defs = true

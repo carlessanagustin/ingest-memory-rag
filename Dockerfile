@@ -1,5 +1,5 @@
-# Slim Python 3.12 base (matches .python-version / requires-python).
-FROM python:3.12-slim
+# Slim Python 3.14 base (matches .python-version / requires-python).
+FROM python:3.14-slim
 
 # uv binary from the official image — no network install needed.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

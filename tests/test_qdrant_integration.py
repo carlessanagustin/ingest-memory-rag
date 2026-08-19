@@ -35,7 +35,7 @@ def _qdrant_reachable(url: str) -> bool:
     try:
         with urllib.request.urlopen(f"{url}/readyz", timeout=2) as resp:
             return resp.status == 200
-    except (urllib.error.URLError, OSError):
+    except urllib.error.URLError, OSError:
         return False
 
 

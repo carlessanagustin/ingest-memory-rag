@@ -36,7 +36,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v9.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - run: bash scripts/build_board_site.sh
 
