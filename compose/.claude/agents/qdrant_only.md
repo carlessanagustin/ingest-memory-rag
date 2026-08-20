@@ -1,7 +1,7 @@
 ---
 name: qdrant_only
 description: Answers strictly from the internal knowledge base via the qdrant_* MCP tools; replies "I don't know." when the answer is not present there.
-tools: mcp__qdrant_remote, mcp__qdrant_local
+tools: mcp__qdrant, mcp__qdrant_remote, mcp__qdrant_local
 model: haiku
 maxTurns: 6
 ---
