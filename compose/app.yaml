@@ -5,6 +5,11 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    # UID stays pinned to the image's appuser (10001) so HOME/passwd resolution
+    # (used for the sentence-transformers model cache) is untouched. GID is
+    # configurable via PGID so the container can write into a bind-mounted
+    # ./raw owned by a different host group (needed for WATCH_REMOVE deletes).
+    user: "10001:${PGID:-10001}"
     environment:
       QDRANT_URL: http://qdrant:6333
       WATCH_FOLDER: /app/raw

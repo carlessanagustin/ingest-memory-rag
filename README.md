@@ -225,6 +225,7 @@ All settings are read from the environment (see [`.env.example`](.env.example)):
 | `QDRANT_RECREATE_INDEX` | `false` | Drop and recreate the collection at startup |
 | `WATCH_USE_POLLING` | `false` | Poll instead of native FS events (needed for bind mounts on Docker Desktop) |
 | `WATCH_REMOVE` | `false` | **Destructive**, opt-in: delete a source file after it is successfully ingested |
+| `PGID` | `10001` | GID the `app` container runs as (Docker stack only) — set to `id -g` on the host so it matches the group owning `./raw`, needed for `WATCH_REMOVE` to delete files |
 
 `.txt`/`.md` files are ingested **recursively** from `WATCH_FOLDER` and its
 subfolders. To exclude files, add a **`.watchignore`** at the `WATCH_FOLDER`
@@ -257,6 +258,13 @@ removed only when at least one chunk was written; if ingestion stores nothing
 to both the startup scan and live events. A failed delete is logged and does not
 crash the watcher. Leave it off unless you deliberately want ingested files
 consumed from `WATCH_FOLDER`.
+
+> **Docker stack + `WATCH_REMOVE` requires a matching group:** `./raw` is a host
+> bind mount, and the `app` container's `appuser` can't delete a file unless its
+> *group* has write access to the containing host directory. Set `PGID` in
+> `.env` to the GID that owns `./raw` on the host — usually your own primary
+> group, from `id -g`. Without it, deletes fail with `PermissionError: [Errno
+> 13] Permission denied` even though ingestion itself succeeds.
 
 ## Development
 
